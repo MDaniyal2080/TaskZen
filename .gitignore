@@ -1,0 +1,48 @@
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env files
+.env
+*.env
+.env.local
+.env.*.local
+client/.env*
+server/.env*
+# Keep example envs tracked
+!client/.env.example
+!server/.env.example
+
+# Node
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build outputs
+.dist/
+dist/
+.next/
+out/
+coverage/
+.cache/
+build/
+client/.next/
+client/out/
+server/dist/
+
+# Uploads
+uploads/
+server/uploads/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo
