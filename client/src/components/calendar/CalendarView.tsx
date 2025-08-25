@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Clock, Tag, User, Plus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, X } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, subMonths, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -35,6 +35,32 @@ interface CalendarCard {
   }>;
 }
 
+type LabelObj = { id: string; name: string; color: string };
+
+function normalizeLabel(lr: unknown): LabelObj | null {
+  if (lr && typeof lr === 'object') {
+    // relation form: { label: { id, name, color } }
+    if (
+      'label' in lr &&
+      (lr as { label?: unknown }).label &&
+      typeof (lr as { label?: unknown }).label === 'object'
+    ) {
+      const inner = (lr as { label?: Record<string, unknown> }).label as Record<string, unknown>;
+      const id = typeof inner.id === 'string' ? inner.id : undefined;
+      const name = typeof inner.name === 'string' ? inner.name : undefined;
+      const color = typeof inner.color === 'string' ? inner.color : undefined;
+      if (id && name && color) return { id, name, color };
+    }
+    // plain form: { id, name, color }
+    const obj = lr as Record<string, unknown>;
+    const id = typeof obj.id === 'string' ? obj.id : undefined;
+    const name = typeof obj.name === 'string' ? obj.name : undefined;
+    const color = typeof obj.color === 'string' ? obj.color : undefined;
+    if (id && name && color) return { id, name, color };
+  }
+  return null;
+}
+
 interface CalendarViewFiltersProps {
   priority?: string; // 'all' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
   assignee?: string; // 'all' | userId
@@ -43,10 +69,12 @@ interface CalendarViewFiltersProps {
   dueDate?: string; // 'all' | 'overdue' | 'today' | 'week' | 'none'
 }
 
+export type CalendarSortBy = 'position' | 'title' | 'dueDate' | 'priority' | 'createdAt';
+
 interface CalendarViewProps {
   boardId?: string;
   filters?: CalendarViewFiltersProps;
-  sortBy?: 'position' | 'title' | 'dueDate' | 'priority' | 'createdAt';
+  sortBy?: CalendarSortBy;
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -58,7 +86,6 @@ export function CalendarView({ boardId, filters, sortBy, sortOrder = 'asc' }: Ca
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const router = useRouter();
   const { socket, connected } = useSocketStore();
-
   const fetchCards = useCallback(async () => {
     setLoading(true);
     try {
@@ -69,7 +96,7 @@ export function CalendarView({ boardId, filters, sortBy, sortOrder = 'asc' }: Ca
         ? endOfMonth(currentDate)
         : endOfWeek(currentDate);
 
-      const params: any = {
+      const params: Record<string, string> = {
         startDate: start.toISOString(),
         endDate: end.toISOString(),
       };
@@ -81,13 +108,13 @@ export function CalendarView({ boardId, filters, sortBy, sortOrder = 'asc' }: Ca
       // Apply filters
       if (filters) {
         if (filters.priority && filters.priority !== 'all') {
-          params.priority = filters.priority;
+          params.priority = String(filters.priority);
         }
         if (filters.assignee && filters.assignee !== 'all') {
-          params.assigneeId = filters.assignee;
+          params.assigneeId = String(filters.assignee);
         }
         if (filters.labels && filters.labels !== 'all') {
-          params.labels = filters.labels; // already comma-separated
+          params.labels = String(filters.labels); // already comma-separated
         }
         if (filters.completed && filters.completed !== 'all') {
           params.completed = filters.completed === 'completed' ? 'true' : 'false';
@@ -96,28 +123,31 @@ export function CalendarView({ boardId, filters, sortBy, sortOrder = 'asc' }: Ca
 
       // Apply sorting (position is meaningless for calendar; default to dueDate)
       if (sortBy && sortBy !== 'position') {
-        params.sortBy = sortBy;
+        params.sortBy = String(sortBy);
       } else {
         params.sortBy = 'dueDate';
       }
-      if (sortOrder) params.sortOrder = sortOrder;
+      if (sortOrder) params.sortOrder = String(sortOrder);
 
       const response = await api.get('/cards/calendar', { params });
-      const raw = Array.isArray(response.data) ? response.data : [];
-      const normalized: CalendarCard[] = raw.map((c: any) => ({
-        ...c,
-        labels: Array.isArray(c.labels)
-          ? c.labels.map((lr: any) => (lr && lr.label ? lr.label : lr)).filter(Boolean)
-          : [],
-      }));
+      const raw = Array.isArray(response.data) ? (response.data as unknown[]) : [];
+      const normalized: CalendarCard[] = raw.map((cRaw) => {
+        const c = cRaw as Partial<CalendarCard> & { labels?: unknown[] };
+        const labels = Array.isArray(c.labels)
+          ? c.labels
+              .map(normalizeLabel)
+              .filter((l): l is LabelObj => Boolean(l))
+          : [];
+        return { ...(c as CalendarCard), labels };
+      });
       setCards(normalized);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to fetch calendar cards:', error);
       toast.error('Failed to load calendar');
     } finally {
       setLoading(false);
     }
-  }, [boardId, currentDate, viewMode, sortBy, sortOrder, JSON.stringify(filters)]);
+  }, [boardId, currentDate, viewMode, sortBy, sortOrder, filters]);
 
   useEffect(() => {
     fetchCards();

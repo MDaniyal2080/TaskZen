@@ -122,6 +122,34 @@ export function GlobalSearch({ initialQuery = '', autoFocus = false }: GlobalSea
       fetchRecentSearches();
     }
   }, [isOpen, query]);
+ 
+  // Debounced search (declare before first usage)
+  const debouncedSearch = useMemo(
+    () =>
+      debounce(async (searchQuery: string) => {
+        if (!searchQuery || searchQuery.length < 2) {
+          setResults(null);
+          setSuggestions([]);
+          return;
+        }
+ 
+        setLoading(true);
+        try {
+          const [searchRes, suggestionsRes] = await Promise.all([
+            api.get('/search', { params: { q: searchQuery } }),
+            api.get('/search/suggestions', { params: { q: searchQuery } }),
+          ]);
+          setResults(searchRes.data);
+          setSuggestions(suggestionsRes.data);
+        } catch (error) {
+          console.error('Search failed:', error);
+          toast.error('Search failed');
+        } finally {
+          setLoading(false);
+        }
+      }, 300),
+    []
+  );
   
   // Auto-focus and search initial query
   useEffect(() => {
@@ -143,33 +171,7 @@ export function GlobalSearch({ initialQuery = '', autoFocus = false }: GlobalSea
     }
   };
 
-  // Debounced search
-  const debouncedSearch = useMemo(
-    () =>
-      debounce(async (searchQuery: string) => {
-        if (!searchQuery || searchQuery.length < 2) {
-          setResults(null);
-          setSuggestions([]);
-          return;
-        }
-
-        setLoading(true);
-        try {
-          const [searchRes, suggestionsRes] = await Promise.all([
-            api.get('/search', { params: { q: searchQuery } }),
-            api.get('/search/suggestions', { params: { q: searchQuery } }),
-          ]);
-          setResults(searchRes.data);
-          setSuggestions(suggestionsRes.data);
-        } catch (error) {
-          console.error('Search failed:', error);
-          toast.error('Search failed');
-        } finally {
-          setLoading(false);
-        }
-      }, 300),
-    []
-  );
+  
 
   useEffect(() => {
     debouncedSearch(query);

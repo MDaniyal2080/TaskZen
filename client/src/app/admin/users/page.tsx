@@ -52,22 +52,17 @@ import { format } from 'date-fns'
 import { InlineSpinner } from '@/components/loading/LoadingStates'
 import {
   Search,
-  Filter,
   MoreHorizontal,
   UserCheck,
   UserX,
   CreditCard,
   Activity,
-  Mail,
-  Calendar,
   Clock,
   Ban,
   Shield,
   Crown,
   Star,
-  TrendingUp,
   DollarSign,
-  FileText,
   Download,
   RefreshCw,
   ChevronLeft,
@@ -158,13 +153,26 @@ type UiActivity = {
 
 const mapActivityToUi = (a: AdminActivity): UiActivity => ({
   id: a.id,
-  userId: (a as any).userId || a.user?.id,
+  userId: a.userId || a.user?.id,
   userName: a.user?.username || a.user?.email || 'Unknown',
   action: (a.type || '').toString().replace(/_/g, ' '),
   details: a.board?.title ? `Board: ${a.board.title}` : undefined,
   timestamp: a.createdAt,
   type: a.type,
 })
+
+// Extract a safe API error message from an unknown error object
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  let msg = fallback
+  if (error && typeof error === 'object' && 'response' in error) {
+    const resp = (error as { response?: { data?: unknown } }).response
+    const data = resp?.data as { message?: unknown } | undefined
+    const m = data?.message
+    if (Array.isArray(m) && typeof m[0] === 'string') msg = m[0]
+    else if (typeof m === 'string') msg = m
+  }
+  return msg
+}
 
 export default function UsersManagementPage() {
   const router = useRouter()
@@ -225,7 +233,7 @@ export default function UsersManagementPage() {
       toast.success('User activated')
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to activate'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Failed to activate')),
   })
   const deactivateMutation = useMutation({
     mutationFn: async (id: string) => (await api.patch(`/admin/users/${id}/deactivate`)).data,
@@ -233,7 +241,7 @@ export default function UsersManagementPage() {
       toast.success('User suspended')
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to suspend'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Failed to suspend')),
   })
   const upgradeProMutation = useMutation({
     mutationFn: async (id: string) => (await api.patch(`/admin/users/${id}/upgrade`)).data,
@@ -241,7 +249,7 @@ export default function UsersManagementPage() {
       toast.success('User upgraded to Pro')
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to upgrade'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Failed to upgrade')),
   })
   const makeAdminMutation = useMutation({
     mutationFn: async (id: string) => (await api.patch(`/admin/users/${id}/make-admin`)).data,
@@ -249,7 +257,7 @@ export default function UsersManagementPage() {
       toast.success('Granted admin role')
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to grant admin'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Failed to grant admin')),
   })
   const removeAdminMutation = useMutation({
     mutationFn: async (id: string) => (await api.patch(`/admin/users/${id}/remove-admin`)).data,
@@ -257,7 +265,7 @@ export default function UsersManagementPage() {
       toast.success('Removed admin role')
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to remove admin'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Failed to remove admin')),
   })
   
   const updateSubscriptionMutation = useMutation({
@@ -268,7 +276,7 @@ export default function UsersManagementPage() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
       setShowSubscriptionDialog(false)
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to update subscription'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Failed to update subscription')),
   })
   const deleteUserMutation = useMutation({
     mutationFn: async (id: string) => (await api.delete(`/admin/users/${id}`)).data,
@@ -276,7 +284,7 @@ export default function UsersManagementPage() {
       toast.success('User deleted')
       queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message || 'Failed to delete user'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Failed to delete user')),
   })
   
   const refreshData = () => {

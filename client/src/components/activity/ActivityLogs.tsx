@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Activity, User, Calendar, FileText, Tag, MessageSquare, 
-  Paperclip, UserPlus, UserMinus, Edit, Trash, Plus, 
-  Clock, Filter, Download
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Activity, FileText, Tag, MessageSquare,
+  Paperclip, UserPlus, UserMinus, Edit, Trash, Plus,
+  Download
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { format, formatDistanceToNow, isToday, isThisWeek, isThisMonth } from 'date-fns';
@@ -17,7 +17,7 @@ interface ActivityLog {
   id: string;
   type: string;
   description: string;
-  metadata: any;
+  metadata: Record<string, unknown>;
   userId: string;
   user: {
     id: string;
@@ -31,6 +31,7 @@ interface ActivityLog {
     id: string;
     title: string;
   };
+  cardId?: string;
   createdAt: string;
 }
 
@@ -40,6 +41,28 @@ interface ActivityLogsProps {
   userId?: string;
   limit?: number;
   showFilters?: boolean;
+}
+
+function isRecord(val: unknown): val is Record<string, unknown> {
+  return !!val && typeof val === 'object';
+}
+
+function isActivityLog(obj: unknown): obj is ActivityLog {
+  if (!isRecord(obj)) return false;
+  const hasUser = isRecord((obj as Record<string, unknown>).user)
+    && typeof (obj as Record<string, unknown>).user !== 'undefined'
+    && typeof ((obj as Record<string, unknown>).user as Record<string, unknown>).id === 'string'
+    && typeof ((obj as Record<string, unknown>).user as Record<string, unknown>).username === 'string';
+  const hasMetadata = isRecord((obj as Record<string, unknown>).metadata);
+  return (
+    typeof (obj as Record<string, unknown>).id === 'string' &&
+    typeof (obj as Record<string, unknown>).type === 'string' &&
+    typeof (obj as Record<string, unknown>).description === 'string' &&
+    hasMetadata &&
+    typeof (obj as Record<string, unknown>).userId === 'string' &&
+    hasUser &&
+    typeof (obj as Record<string, unknown>).createdAt === 'string'
+  );
 }
 
 export function ActivityLogs({ 
@@ -57,7 +80,7 @@ export function ActivityLogs({
   const realtimeRaw = useBoardStore((s) => s.activities);
 
   // Helpers
-  const toDotType = (t: string): string => {
+  const toDotType = useCallback((t: string): string => {
     const map: Record<string, string> = {
       BOARD_CREATED: 'board.created',
       BOARD_UPDATED: 'board.updated',
@@ -75,11 +98,12 @@ export function ActivityLogs({
     };
     if (!t) return 'activity';
     return map[t as keyof typeof map] || (t.includes('.') ? t : t.toLowerCase());
-  };
+  }, []);
 
-  const buildDescription = (type: string, data: any): string => {
+  const buildDescription = useCallback((type: string, data: unknown): string => {
     const t = toDotType(type);
-    const title = data?.title || data?.name || '';
+    const d = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+    const title = typeof d.title === 'string' ? d.title : (typeof d.name === 'string' ? d.name : '');
     if (t === 'board.created') return `created the board${title ? ` "${title}"` : ''}`;
     if (t === 'board.updated') return 'updated the board';
     if (t === 'board.deleted') return `deleted the board${title ? ` "${title}"` : ''}`;
@@ -93,31 +117,34 @@ export function ActivityLogs({
     // lists -> treat as board-level
     if (t.startsWith('board.list_')) return t.replace('board.', '').replace('_', ' ');
     return type?.toString() || 'activity';
-  };
+  }, [toDotType]);
 
-  const normalizeActivity = (a: any): ActivityLog => {
-    if (!a) return a as any;
-    // If already in UI shape
-    const hasDescription = typeof (a as any)?.description === 'string';
-    const hasMetadata = Object.prototype.hasOwnProperty.call(a, 'metadata');
-    if (hasDescription && hasMetadata) {
-      return a as ActivityLog;
-    }
-    const dotType = toDotType((a as any)?.type);
-    const metadata = (a as any)?.metadata ?? (a as any)?.data ?? {};
-    const desc = buildDescription((a as any)?.type, metadata);
+  const normalizeActivity = useCallback((a: unknown): ActivityLog => {
+    if (isActivityLog(a)) return a;
+    const obj: Record<string, unknown> = isRecord(a) ? a : {};
+    const typeRaw = typeof obj.type === 'string' ? (obj.type as string) : '';
+    const metadata = (isRecord(obj.metadata) ? (obj.metadata as Record<string, unknown>) :
+      (isRecord(obj.data) ? (obj.data as Record<string, unknown>) : {}));
+    const desc = typeof obj.description === 'string' ? (obj.description as string) : buildDescription(typeRaw, metadata);
+    const userRaw = isRecord(obj.user) ? (obj.user as Record<string, unknown>) : undefined;
+    const boardRaw = isRecord(obj.board) ? (obj.board as Record<string, unknown>) : undefined;
     return {
-      id: (a as any)?.id,
-      type: dotType,
+      id: typeof obj.id === 'string' ? (obj.id as string) : '',
+      type: toDotType(typeRaw),
       description: desc,
       metadata,
-      userId: (a as any)?.userId,
-      user: (a as any)?.user || { id: '', username: 'Unknown' },
-      boardId: (a as any)?.boardId,
-      board: (a as any)?.board,
-      createdAt: (a as any)?.createdAt,
-    } as ActivityLog;
-  };
+      userId: typeof obj.userId === 'string' ? (obj.userId as string) : '',
+      user: (userRaw && typeof userRaw.id === 'string' && typeof userRaw.username === 'string')
+        ? (userRaw as ActivityLog['user'])
+        : { id: '', username: 'Unknown' },
+      boardId: typeof obj.boardId === 'string' ? (obj.boardId as string) : undefined,
+      board: (boardRaw && typeof boardRaw.id === 'string' && typeof boardRaw.title === 'string')
+        ? (boardRaw as ActivityLog['board'])
+        : undefined,
+      cardId: typeof obj.cardId === 'string' ? (obj.cardId as string) : undefined,
+      createdAt: typeof obj.createdAt === 'string' ? (obj.createdAt as string) : new Date().toISOString(),
+    };
+  }, [buildDescription, toDotType]);
 
   const getCategory = (dotType: string): string => {
     if (!dotType) return 'other';
@@ -143,8 +170,8 @@ export function ActivityLogs({
     queryKey: ['activities', { boardId, cardId, userId, limit }],
     enabled: !!boardId,
     initialPageParam: 1 as number,
-    queryFn: async ({ pageParam }) => {
-      const params: any = { page: pageParam, pageSize: limit };
+    queryFn: async ({ pageParam }: { pageParam: number }) => {
+      const params: Record<string, unknown> = { page: pageParam, pageSize: limit };
       if (cardId) params.cardId = cardId;
       if (userId) params.userId = userId;
       const response = await api.get(`/boards/${boardId}/activities`, { params });
@@ -194,7 +221,10 @@ export function ActivityLogs({
   };
 
   // Build merged + filtered list for display
-  const realtimeNormalized = useMemo(() => (Array.isArray(realtimeRaw) ? realtimeRaw.map(normalizeActivity) : []), [realtimeRaw]);
+  const realtimeNormalized = useMemo(
+    () => (Array.isArray(realtimeRaw) ? realtimeRaw.map(normalizeActivity) : []),
+    [realtimeRaw, normalizeActivity]
+  );
   const activitiesFromQuery = useMemo(
     () => (data?.pages ? data.pages.flatMap((p) => p.items) : [] as ActivityLog[]),
     [data]
@@ -209,7 +239,7 @@ export function ActivityLogs({
 
     // Scope filters
     if (boardId) merged = merged.filter((a) => !a.boardId || a.boardId === boardId);
-    if (cardId) merged = merged.filter((a) => (a as any)?.cardId === cardId);
+    if (cardId) merged = merged.filter((a) => a.cardId === cardId);
     if (userId) merged = merged.filter((a) => a.userId === userId);
 
     // Type filter
@@ -239,7 +269,7 @@ export function ActivityLogs({
         toast.error('Select a board to export activities');
         return;
       }
-      const params: any = { format: 'csv' };
+      const params: Record<string, string> = { format: 'csv' };
       if (cardId) params.cardId = cardId;
       if (userId) params.userId = userId;
 
@@ -305,7 +335,7 @@ export function ActivityLogs({
             <select
               value={dateRange}
               onChange={(e) => {
-                setDateRange(e.target.value as any);
+                setDateRange(e.target.value as 'today' | 'week' | 'month' | 'all');
               }}
               className="px-3 py-1.5 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               aria-label="Filter activities by date"
@@ -359,18 +389,18 @@ export function ActivityLogs({
                         )}
 
                         {/* Metadata */}
-                        {activity.metadata && Object.keys(activity.metadata).length > 0 && (
+                        {Object.keys(activity.metadata).length > 0 && (
                           <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            {activity.metadata.oldValue && activity.metadata.newValue && (
+                            {Boolean((activity.metadata as Record<string, unknown>)['oldValue']) && Boolean((activity.metadata as Record<string, unknown>)['newValue']) && (
                               <p>
-                                Changed from "{activity.metadata.oldValue}" to "{activity.metadata.newValue}"
+                                Changed from &quot;{String((activity.metadata as Record<string, unknown>)['oldValue'])}&quot; to &quot;{String((activity.metadata as Record<string, unknown>)['newValue'])}&quot;
                               </p>
                             )}
-                            {activity.metadata.fileName && (
-                              <p>File: {activity.metadata.fileName}</p>
+                            {Boolean((activity.metadata as Record<string, unknown>)['fileName']) && (
+                              <p>File: {String((activity.metadata as Record<string, unknown>)['fileName'])}</p>
                             )}
-                            {activity.metadata.comment && (
-                              <p className="italic">"{activity.metadata.comment}"</p>
+                            {Boolean((activity.metadata as Record<string, unknown>)['comment']) && (
+                              <p className="italic">&quot;{String((activity.metadata as Record<string, unknown>)['comment'])}&quot;</p>
                             )}
                           </div>
                         )}

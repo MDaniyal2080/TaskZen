@@ -27,7 +27,9 @@ import { Labels } from "@/components/card/Labels";
 import { Comments } from "@/components/card/Comments";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { Pluggable, PluggableList } from "unified";
 import { useSettings } from "@/contexts/SettingsContext";
+import type { BoardMemberPayload } from "@/store/board-store";
 
 // Lightweight local types to avoid any
 type UserLike = {
@@ -36,11 +38,6 @@ type UserLike = {
   lastName?: string;
   username?: string;
   avatar?: string;
-};
-
-type BoardMemberLike = {
-  userId?: string;
-  user?: UserLike | null;
 };
 
 type ChecklistItem = {
@@ -56,7 +53,7 @@ type CardLike = {
   id: string;
   boardId?: string;
   title?: string;
-  description?: string;
+  description?: string | null;
   dueDate?: string | Date | null;
   isCompleted?: boolean;
   priority?: PriorityKey;
@@ -65,6 +62,9 @@ type CardLike = {
   comments?: unknown[];
   _count?: { comments?: number; attachments?: number } | null;
 };
+
+// Type-safe plugin list for react-markdown to avoid vfile type mismatches
+const gfmPlugins: PluggableList = [remarkGfm as unknown as Pluggable];
 
 interface CardDetailModalProps {
   open: boolean;
@@ -106,7 +106,7 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
   const [commentCount, setCommentCount] = useState<number>((card?.comments?.length ?? card?._count?.comments ?? 0) as number);
 
   const { socket } = useSocketStore();
-  const { typingByCard, board, updateCard: updateCardInStore } = useBoardStore();
+  const { typingByCard, board, updateCard: updateCardInStore, handleCardUpdated } = useBoardStore();
   const { user } = useAuthStore();
   const { settings } = useSettings();
   const commentsEnabled = settings?.features?.enableComments !== false;
@@ -115,9 +115,35 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
   // Helpers to get user display data
   const getUserById = (id: string): UserLike | null => {
     if (!board) return null;
-    if (board.owner && (board.owner as UserLike).id === id) return board.owner as UserLike;
-    const member = (board.members || []).find((m: BoardMemberLike) => m.userId === id || m.user?.id === id) as BoardMemberLike | undefined;
-    return (member?.user as UserLike) || null;
+    // Owner check
+    if (board.owner?.id === id) {
+      const o = board.owner;
+      return {
+        id: o.id,
+        firstName: o.firstName,
+        lastName: o.lastName,
+        username: o.username,
+        avatar: o.avatar,
+      };
+    }
+    // Member lookup aligned to BoardMemberPayload typing
+    const members: BoardMemberPayload[] = Array.isArray(board.members) ? board.members : [];
+    const member = members.find((m) => m.userId === id || m.user?.id === id);
+    if (member?.user && typeof member.user.id === 'string') {
+      const u = member.user;
+      return {
+        id: id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        username: u.username,
+        avatar: u.avatar,
+      };
+    }
+    if (member?.userId === id) {
+      // Minimal user shape when only userId is known
+      return { id };
+    }
+    return null;
   };
   const displayName = (u: UserLike | null | undefined) => (u?.firstName && u?.lastName) ? `${u.firstName} ${u.lastName}` : (u?.firstName || u?.username || 'User');
 
@@ -144,15 +170,15 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
     } catch {}
   };
   const scheduleTypingStop = (delay = 1500) => {
-    if (typingStopTimeout.current) clearTimeout(typingStopTimeout.current);
-    typingStopTimeout.current = setTimeout(() => {
+    if (typingStopTimeout.current) window.clearTimeout(typingStopTimeout.current);
+    typingStopTimeout.current = window.setTimeout(() => {
       emitTypingStop();
     }, delay);
   };
 
   useEffect(() => {
     return () => {
-      if (typingStopTimeout.current) clearTimeout(typingStopTimeout.current);
+      if (typingStopTimeout.current) window.clearTimeout(typingStopTimeout.current);
       emitTypingStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,6 +219,32 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
       socket.off('cardUpdated', onCardUpdated);
     };
   }, [socket, open, card?.id]);
+
+  // Close modal if the currently viewed card is deleted elsewhere
+  useEffect(() => {
+    if (!socket || !open || !card?.id) return;
+    const onCardDeleted = (payload: unknown) => {
+      let deletedId: string | undefined;
+      if (typeof payload === 'string') {
+        deletedId = payload;
+      } else if (
+        payload &&
+        typeof payload === 'object' &&
+        'id' in (payload as Record<string, unknown>) &&
+        typeof (payload as { id?: unknown }).id === 'string'
+      ) {
+        deletedId = (payload as { id: string }).id;
+      }
+      if (deletedId && deletedId === card.id) {
+        try { toast.success('This card was deleted'); } catch {}
+        onClose();
+      }
+    };
+    socket.on('cardDeleted', onCardDeleted);
+    return () => {
+      socket.off('cardDeleted', onCardDeleted);
+    };
+  }, [socket, open, card?.id, onClose]);
 
   if (!open) return null;
 
@@ -247,7 +299,9 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
 
     try {
       const response = await api.post<Attachment[]>(`/cards/${card.id}/attachments`, formData);
-      setAttachments([...attachments, ...response.data]);
+      const next = [...attachments, ...response.data];
+      setAttachments(next);
+      try { handleCardUpdated({ id: card.id, attachments: next, _count: { attachments: next.length } }); } catch {}
       toast.success('Files uploaded successfully');
     } catch (error: unknown) {
       console.error('Failed to upload files:', error);
@@ -267,7 +321,9 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
     }
     try {
       await api.delete(`/cards/attachments/${attachmentId}`);
-      setAttachments(attachments.filter((a: Attachment) => a.id !== attachmentId));
+      const next = attachments.filter((a: Attachment) => a.id !== attachmentId);
+      setAttachments(next);
+      try { handleCardUpdated({ id: card.id, attachments: next, _count: { attachments: next.length } }); } catch {}
       toast.success('Attachment deleted');
     } catch (error: unknown) {
       console.error('Failed to delete attachment:', error);
@@ -365,7 +421,7 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
                     return (
                       <div key={u.id} title={label}>
                         <Avatar className="h-6 w-6 ring-2 ring-white dark:ring-slate-900 bg-slate-200 text-slate-700 text-[10px] overflow-hidden">
-                          <AvatarImage src={avatar} alt={label} />
+                          <AvatarImage src={avatar ?? ''} alt={label} />
                           <AvatarFallback className="bg-slate-200 text-slate-700 text-[10px]">
                             {initials}
                           </AvatarFallback>
@@ -390,7 +446,9 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
             <div>
               <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Labels</label>
               <div className="mt-2">
-                <Labels cardId={card.id} boardId={card.boardId} />
+                {(board?.id || card.boardId) && (
+                  <Labels cardId={card.id} boardId={(board?.id ?? card.boardId)!} />
+                )}
               </div>
             </div>
 
@@ -409,7 +467,7 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
                 <select
                   value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
+                  onChange={(e) => setPriority(e.target.value as PriorityKey)}
                   className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white focus:outline-none"
                 >
                   {Object.entries(priorityConfig).map(([key, config]) => (
@@ -471,7 +529,7 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
                 />
               ) : (
                 <div className="w-full min-h-[120px] px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-sm text-slate-900 dark:text-white">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown remarkPlugins={gfmPlugins}>
                     {description || '*No description yet.*'}
                   </ReactMarkdown>
                 </div>
@@ -611,10 +669,10 @@ export function CardDetailModal({ open, onClose, card, onSaved }: CardDetailModa
                   </span>
                 </div>
               )}
-              {(attachments?.length > 0 || card?._count?.attachments > 0) && (
+              {(((attachments?.length ?? 0) > 0) || ((card?._count?.attachments ?? 0) > 0)) && (
                 <div className="inline-flex items-center gap-1">
                   <Paperclip className="w-4 h-4" />
-                  <span className="text-sm">{attachments?.length || card._count?.attachments || 0} attachments</span>
+                  <span className="text-sm">{attachments?.length ?? (card?._count?.attachments ?? 0)} attachments</span>
                 </div>
               )}
               {commentsEnabled && commentCount > 0 && (

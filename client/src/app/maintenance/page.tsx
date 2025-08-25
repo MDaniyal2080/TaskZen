@@ -29,7 +29,7 @@ export default function MaintenancePage() {
           setInfo(m)
           try { sessionStorage.setItem('maintenance_info', JSON.stringify(m)) } catch {}
         }
-      } catch (e) {
+      } catch {
         // ignore; we'll show whatever we have
       } finally {
         setLoading(false)

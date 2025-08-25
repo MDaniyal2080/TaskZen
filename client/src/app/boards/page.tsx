@@ -37,6 +37,15 @@ export default function BoardsPage() {
   const builtInTemplates = templates.filter((t) => !t.isCustom)
   const customTemplates = templates.filter((t) => t.isCustom)
 
+  const getErrorMessage = (err: unknown, fallback: string) => {
+    if (typeof err === 'object' && err !== null) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string }
+      if (e.response?.data?.message) return e.response.data.message
+      if (typeof e.message === 'string') return e.message
+    }
+    return fallback
+  }
+
   useEffect(() => {
     const init = async () => {
       if (!token) await fetchMe()
@@ -56,7 +65,7 @@ export default function BoardsPage() {
     init()
   }, [token, fetchMe, router])
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error } = useQuery<Board[], Error>({
     queryKey: ['boards'],
     queryFn: getBoards,
     enabled: ready,
@@ -66,7 +75,8 @@ export default function BoardsPage() {
 
   useEffect(() => {
     if (isError) {
-      toast.error((error as any)?.message || 'Failed to load boards')
+      const msg = error instanceof Error ? error.message : 'Failed to load boards'
+      toast.error(msg)
     }
   }, [isError, error])
 
@@ -108,8 +118,8 @@ export default function BoardsPage() {
       setBackground('')
       setTheme('default')
       router.push(`/boards/${board.id}`)
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Failed to create board')
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, 'Failed to create board'))
     } finally {
       setCreating(false)
     }
@@ -233,7 +243,7 @@ export default function BoardsPage() {
                         <div
                           className="p-4 bg-muted/30 rounded-lg border-2 border-dashed text-sm text-muted-foreground"
                         >
-                          You have no custom templates yet. Open any board and use "Save as Template" from the board menu.
+                          You have no custom templates yet. Open any board and use &quot;Save as Template&quot; from the board menu.
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

@@ -9,6 +9,19 @@ import { Check, Crown, Rocket, Users, BarChart3, Shield, Zap, Sparkles } from 'l
 import { toast } from 'react-hot-toast'
 import { api } from '@/lib/api'
 
+function extractErrorMessage(e: unknown, fallback: string) {
+  if (
+    e &&
+    typeof e === 'object' &&
+    'response' in e &&
+    (e as { response?: { data?: { message?: unknown } } }).response
+  ) {
+    const msg = (e as { response?: { data?: { message?: unknown } } }).response?.data?.message
+    if (typeof msg === 'string') return msg
+  }
+  return fallback
+}
+
 interface PricingPlan {
   name: string
   price: string
@@ -120,8 +133,8 @@ export default function UpgradePage() {
         await fetchMe() // Refresh user data
         router.push('/boards')
       }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Failed to upgrade. Please try again.')
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to upgrade. Please try again.'))
     } finally {
       setLoading(false)
     }

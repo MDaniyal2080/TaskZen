@@ -5,6 +5,7 @@ import { Providers } from '@/components/providers'
 import { Toaster } from 'react-hot-toast'
 import { Navbar } from '@/components/layout/navbar'
 import TopLoader from '@/components/loading/TopLoader'
+import { Suspense } from 'react'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -30,8 +31,12 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
         <Providers>
-          <Navbar />
-          <TopLoader />
+          <Suspense fallback={null}>
+            <Navbar />
+          </Suspense>
+          <Suspense fallback={null}>
+            <TopLoader />
+          </Suspense>
           <div>
             {children}
           </div>
@@ -51,3 +56,4 @@ export default function RootLayout({
     </html>
   )
 }
+

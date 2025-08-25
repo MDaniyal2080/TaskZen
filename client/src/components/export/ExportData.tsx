@@ -3,12 +3,18 @@
 import React, { useState } from 'react';
 import { 
   Download, FileText, FileSpreadsheet, FileJson, 
-  Image, Calendar, Check, X, AlertCircle 
+  X, AlertCircle, MessageSquare, Paperclip, Activity, Archive
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { LoadingButton } from '@/components/loading/LoadingStates';
+
+// HTTP error helpers
+const getHttpStatus = (error: unknown): number | undefined =>
+  (error as { response?: { status?: number } })?.response?.status;
+const getErrorMessage = (error: unknown): string | undefined =>
+  (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
 
 interface ExportOptions {
   format: 'json' | 'csv' | 'pdf' | 'markdown' | 'excel';
@@ -27,6 +33,18 @@ interface ExportDataProps {
   cardId?: string;
   scope: 'board' | 'card' | 'workspace' | 'user';
 }
+
+type ExportParams = {
+  format: ExportOptions['format'];
+  includeComments: boolean;
+  includeAttachments: boolean;
+  includeActivity: boolean;
+  includeArchived: boolean;
+  fromDate?: string;
+  toDate?: string;
+};
+
+type IncludeKey = keyof Pick<ExportOptions, 'includeComments' | 'includeAttachments' | 'includeActivity' | 'includeArchived'>;
 
 export function ExportData({ boardId, cardId, scope }: ExportDataProps) {
   const [isExporting, setIsExporting] = useState(false);
@@ -81,7 +99,7 @@ export function ExportData({ boardId, cardId, scope }: ExportDataProps) {
     setIsExporting(true);
     try {
       let endpoint = '';
-      const params: any = {
+      const params: ExportParams = {
         format: options.format,
         includeComments: options.includeComments,
         includeAttachments: options.includeAttachments,
@@ -133,77 +151,17 @@ export function ExportData({ boardId, cardId, scope }: ExportDataProps) {
 
       toast.success(`Data exported successfully as ${formatInfo[options.format].name}`);
       setShowOptions(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Export failed:', error);
-      toast.error(error.response?.data?.message || 'Failed to export data');
+      const status = getHttpStatus(error);
+      if (status === 403) {
+        toast.error('You have read-only access on this board');
+      } else {
+        toast.error(getErrorMessage(error) || 'Failed to export data');
+      }
     } finally {
       setIsExporting(false);
     }
-  };
-
-  const handleBulkExport = async () => {
-    setIsExporting(true);
-    try {
-      // Export all formats
-      const formats: ExportOptions['format'][] = ['json', 'csv', 'pdf', 'markdown'];
-      const exports = formats.map(f => 
-        handleSingleExport(f)
-      );
-      
-      await Promise.all(exports);
-      toast.success('All formats exported successfully');
-    } catch (error) {
-      toast.error('Some exports failed');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleSingleExport = async (fmt: ExportOptions['format']) => {
-    const params: any = {
-      format: fmt,
-      includeComments: options.includeComments,
-      includeAttachments: options.includeAttachments,
-      includeActivity: options.includeActivity,
-      includeArchived: options.includeArchived,
-    };
-
-    let endpoint = '';
-    switch (scope) {
-      case 'board':
-        endpoint = `/boards/${boardId}/export`;
-        break;
-      case 'card':
-        endpoint = `/cards/${cardId}/export`;
-        break;
-      case 'workspace':
-        endpoint = '/export/workspace';
-        break;
-      case 'user':
-        endpoint = '/export/user-data';
-        break;
-    }
-
-    const response = await api.get(endpoint, {
-      params,
-      responseType: 'blob',
-    });
-
-    const blob = new Blob([response.data], { 
-      type: formatInfo[fmt].mimeType 
-    });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    
-    const timestamp = format(new Date(), 'yyyy-MM-dd-HHmm');
-    const filename = `taskzen-${scope}-${timestamp}${formatInfo[fmt].extension}`;
-    link.setAttribute('download', filename);
-    
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
   };
 
   const getScopeLabel = () => {
@@ -267,7 +225,7 @@ export function ExportData({ boardId, cardId, scope }: ExportDataProps) {
                       return (
                         <button
                           key={key}
-                          onClick={() => setOptions(prev => ({ ...prev, format: key as any }))}
+                          onClick={() => setOptions(prev => ({ ...prev, format: key as ExportOptions['format'] }))}
                           className={`
                             p-3 rounded-lg border-2 transition-all text-left
                             ${options.format === key
@@ -307,10 +265,10 @@ export function ExportData({ boardId, cardId, scope }: ExportDataProps) {
                       >
                         <input
                           type="checkbox"
-                          checked={options[key as keyof ExportOptions] as boolean}
+                          checked={options[key as IncludeKey]}
                           onChange={(e) => setOptions(prev => ({ 
                             ...prev, 
-                            [key]: e.target.checked 
+                            [key as IncludeKey]: e.target.checked 
                           }))}
                           className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                         />
@@ -432,8 +390,8 @@ export function QuickExport({ boardId }: { boardId: string }) {
       window.URL.revokeObjectURL(url);
 
       toast.success('Board exported successfully');
-    } catch (error) {
-      toast.error('Failed to export board');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || 'Failed to export board');
     } finally {
       setIsExporting(false);
     }
@@ -454,9 +412,3 @@ export function QuickExport({ boardId }: { boardId: string }) {
     </button>
   );
 }
-
-// Missing import fix
-const Archive = FileText;
-const Paperclip = FileText;
-const MessageSquare = FileText;
-const Activity = Calendar;

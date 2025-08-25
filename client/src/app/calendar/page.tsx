@@ -54,7 +54,7 @@ function CalendarInner() {
 
 export default function CalendarPage() {
   const router = useRouter();
-  const { user, token, fetchMe } = useAuthStore();
+  const { token, fetchMe } = useAuthStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

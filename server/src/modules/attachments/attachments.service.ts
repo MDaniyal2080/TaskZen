@@ -3,10 +3,11 @@ import { PrismaService } from '../../database/prisma.service';
 import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { S3Service } from '../../common/services/s3.service';
+import { WebsocketGateway } from '../websocket/websocket.gateway';
 
 @Injectable()
 export class AttachmentsService {
-  constructor(private prisma: PrismaService, private readonly s3: S3Service) {}
+  constructor(private prisma: PrismaService, private readonly s3: S3Service, private readonly ws: WebsocketGateway) {}
 
   async create(data: {
     cardId: string;
@@ -76,12 +77,19 @@ export class AttachmentsService {
     });
 
     // For S3-backed attachments, return with a temporary download URL for convenience
+    let result: any;
     if (isS3) {
       const signedUrl = await this.s3.getPresignedDownloadUrl(attachment.url).catch(() => null);
-      return { ...attachment, url: signedUrl || this.s3.buildPublicUrl(attachment.url) } as any;
+      result = { ...attachment, url: signedUrl || this.s3.buildPublicUrl(attachment.url) } as any;
+    } else {
+      result = attachment as any;
     }
 
-    return attachment as any;
+    // Emit real-time update with the current full attachments list (presigned URLs for S3)
+    const updatedAttachments = await this.findByCard(data.cardId);
+    this.ws.notifyCardUpdated(card.list.board.id, { id: data.cardId, attachments: updatedAttachments });
+
+    return result;
   }
 
   async findByCard(cardId: string) {
@@ -170,6 +178,10 @@ export class AttachmentsService {
         },
       },
     });
+
+    // Emit real-time update with remaining attachments (presigned URLs for S3)
+    const remaining = await this.findByCard(attachment.cardId);
+    this.ws.notifyCardUpdated(attachment.card.list.board.id, { id: attachment.cardId, attachments: remaining });
 
     return deleted;
   }

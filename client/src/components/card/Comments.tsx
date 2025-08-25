@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageSquare, Send, Edit2, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -10,6 +10,12 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+
+// HTTP error helpers
+const getHttpStatus = (error: unknown): number | undefined =>
+  (error as { response?: { status?: number } })?.response?.status;
+const getErrorMessage = (error: unknown): string | undefined =>
+  (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
 
 interface Comment {
   id: string;
@@ -30,6 +36,10 @@ interface CommentsProps {
   onCountChange?: (count: number) => void;
 }
 
+type CommentCreatedPayload = { cardId: string; comment: Comment };
+type CommentUpdatedPayload = { cardId: string; comment: Comment };
+type CommentDeletedPayload = { cardId: string; id: string };
+
 export function Comments({ cardId, onCountChange }: CommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -39,7 +49,7 @@ export function Comments({ cardId, onCountChange }: CommentsProps) {
   const { user } = useAuthStore();
   const { socket } = useSocketStore();
   const { board } = useBoardStore();
-  const typingStopTimeout = useRef<any>(null);
+  const typingStopTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { settings } = useSettings();
   const commentsEnabled = settings?.features?.enableComments !== false;
 
@@ -53,24 +63,33 @@ export function Comments({ cardId, onCountChange }: CommentsProps) {
     }
   }, [comments.length, commentsEnabled, onCountChange]);
 
-  const emitTypingStart = () => {
+  const emitTypingStart = useCallback(() => {
     if (!commentsEnabled || !socket || !board?.id || !cardId) return;
     try {
       socket.emit('typingStart', { boardId: board.id, cardId });
     } catch {}
-  };
-  const emitTypingStop = () => {
+  }, [commentsEnabled, socket, board?.id, cardId]);
+  const emitTypingStop = useCallback(() => {
     if (!commentsEnabled || !socket || !board?.id || !cardId) return;
     try {
       socket.emit('typingStop', { boardId: board.id, cardId });
     } catch {}
-  };
+  }, [commentsEnabled, socket, board?.id, cardId]);
   const scheduleTypingStop = (delay = 1500) => {
     if (typingStopTimeout.current) clearTimeout(typingStopTimeout.current);
     typingStopTimeout.current = setTimeout(() => {
       emitTypingStop();
     }, delay);
   };
+
+  const fetchComments = useCallback(async () => {
+    try {
+      const response = await api.get(`/comments/card/${cardId}`);
+      setComments(response.data);
+    } catch (error: unknown) {
+      console.error('Failed to fetch comments:', error);
+    }
+  }, [cardId]);
 
   useEffect(() => {
     if (!commentsEnabled) {
@@ -84,12 +103,12 @@ export function Comments({ cardId, onCountChange }: CommentsProps) {
       if (typingStopTimeout.current) clearTimeout(typingStopTimeout.current);
       emitTypingStop();
     };
-  }, [cardId, commentsEnabled]);
+  }, [cardId, commentsEnabled, fetchComments, emitTypingStop]);
 
   // Realtime comment events
   useEffect(() => {
     if (!commentsEnabled || !socket) return;
-    const onCreated = (data: any) => {
+    const onCreated = (data: CommentCreatedPayload) => {
       if (!data || data.cardId !== cardId) return;
       setComments((prev) => {
         if (!data?.comment) return prev;
@@ -98,12 +117,12 @@ export function Comments({ cardId, onCountChange }: CommentsProps) {
         return next;
       });
     };
-    const onUpdated = (data: any) => {
+    const onUpdated = (data: CommentUpdatedPayload) => {
       if (!data || data.cardId !== cardId) return;
       if (!data?.comment) return;
       setComments((prev) => prev.map((c) => (c.id === data.comment.id ? data.comment : c)));
     };
-    const onDeleted = (data: any) => {
+    const onDeleted = (data: CommentDeletedPayload) => {
       if (!data || data.cardId !== cardId) return;
       if (!data?.id) return;
       setComments((prev) => {
@@ -121,14 +140,7 @@ export function Comments({ cardId, onCountChange }: CommentsProps) {
     };
   }, [commentsEnabled, socket, cardId, onCountChange]);
 
-  const fetchComments = async () => {
-    try {
-      const response = await api.get(`/comments/card/${cardId}`);
-      setComments(response.data);
-    } catch (error) {
-      console.error('Failed to fetch comments:', error);
-    }
-  };
+  
 
   const handleAddComment = async () => {
     if (!commentsEnabled) {
@@ -148,11 +160,11 @@ export function Comments({ cardId, onCountChange }: CommentsProps) {
       setNewComment('');
       toast.success('Comment added');
       emitTypingStop();
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      if (getHttpStatus(error) === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to add comment');
+        toast.error(getErrorMessage(error) || 'Failed to add comment');
       }
     } finally {
       setLoading(false);
@@ -175,11 +187,11 @@ export function Comments({ cardId, onCountChange }: CommentsProps) {
       setEditContent('');
       toast.success('Comment updated');
       emitTypingStop();
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      if (getHttpStatus(error) === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to update comment');
+        toast.error(getErrorMessage(error) || 'Failed to update comment');
       }
     }
   };
@@ -196,11 +208,11 @@ export function Comments({ cardId, onCountChange }: CommentsProps) {
       const next = comments.filter(c => c.id !== id);
       setComments(next);
       toast.success('Comment deleted');
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      if (getHttpStatus(error) === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to delete comment');
+        toast.error(getErrorMessage(error) || 'Failed to delete comment');
       }
     }
   };

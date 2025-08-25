@@ -13,11 +13,9 @@ import { Separator } from '@/components/ui/separator'
 import { useAuthStore } from '@/store/auth'
 import { toast } from 'react-hot-toast'
 import {
-  Settings, Shield, Bell, Database, 
-  Server, Zap, Globe, Lock, Key, AlertTriangle,
-  ToggleLeft, Save, RefreshCw, Download, Upload,
-  FileText, HardDrive, Activity, Wrench, AlertCircle,
-  CheckCircle, XCircle, Info, Clock, Users, CreditCard, Mail
+  Settings, Shield, AlertTriangle,
+  ToggleLeft, Save, Download, Upload,
+  Wrench, CreditCard, Mail
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useSettings } from '@/contexts/SettingsContext'
@@ -120,9 +118,16 @@ export default function AdminSettingsPage() {
       setNewPassword('')
       setConfirmNewPassword('')
     },
-    onError: (err: any) => {
-      const msg = err?.response?.data?.message || 'Failed to update password'
-      toast.error(Array.isArray(msg) ? msg[0] : msg)
+    onError: (error: unknown) => {
+      let msg: string = 'Failed to update password'
+      if (error && typeof error === 'object' && 'response' in error) {
+        const resp = (error as { response?: { data?: unknown } }).response
+        const data = resp?.data as { message?: unknown } | undefined
+        const m = data?.message
+        if (Array.isArray(m) && typeof m[0] === 'string') msg = m[0]
+        else if (typeof m === 'string') msg = m
+      }
+      toast.error(msg)
     }
   })
 
@@ -193,7 +198,7 @@ export default function AdminSettingsPage() {
         setSettings(imported)
         setHasChanges(true)
         toast.success('Settings imported successfully')
-      } catch (error) {
+      } catch {
         toast.error('Invalid settings file')
       }
     }
@@ -201,31 +206,73 @@ export default function AdminSettingsPage() {
   }
 
   const sanitizeSettings = (s: SystemSettings): SystemSettings => {
-    const copy: any = JSON.parse(JSON.stringify(s))
-    if (copy?.general) {
-      delete copy.general.siteUrl
-      delete copy.general.supportEmail
+    return {
+      general: {
+        siteName: s.general.siteName,
+        maxBoardsPerUser: s.general.maxBoardsPerUser,
+        maxCardsPerBoard: s.general.maxCardsPerBoard,
+        maxFileSize: s.general.maxFileSize,
+      },
+      features: {
+        enableRegistration: s.features.enableRegistration,
+        enableRealTimeUpdates: s.features.enableRealTimeUpdates,
+        enableFileUploads: s.features.enableFileUploads,
+        enableComments: s.features.enableComments,
+        enablePublicBoards: s.features.enablePublicBoards,
+        enableAnalytics: s.features.enableAnalytics,
+      },
+      security: {
+        requireEmailVerification: s.security.requireEmailVerification,
+        enableTwoFactor: s.security.enableTwoFactor,
+        sessionTimeout: s.security.sessionTimeout,
+        passwordMinLength: s.security.passwordMinLength,
+        maxLoginAttempts: s.security.maxLoginAttempts,
+        enableRateLimiting: s.security.enableRateLimiting,
+        rateLimitRequests: s.security.rateLimitRequests,
+        rateLimitWindow: s.security.rateLimitWindow,
+      },
+      maintenance: {
+        enabled: s.maintenance.enabled,
+        message: s.maintenance.message,
+        scheduledAt: s.maintenance.scheduledAt,
+        estimatedDuration: s.maintenance.estimatedDuration,
+      },
+      email: {
+        enabled: s.email.enabled,
+        provider: s.email.provider,
+        fromEmail: s.email.fromEmail,
+        fromName: s.email.fromName,
+        smtpHost: s.email.smtpHost,
+        smtpPort: s.email.smtpPort,
+        smtpUser: s.email.smtpUser,
+        smtpPassword: s.email.smtpPassword,
+        templates: {
+          welcome: s.email.templates.welcome,
+          passwordReset: s.email.templates.passwordReset,
+          emailVerification: s.email.templates.emailVerification,
+          subscription: s.email.templates.subscription,
+        },
+      },
+      payments: {
+        enabled: s.payments.enabled,
+        provider: s.payments.provider,
+        currency: s.payments.currency,
+        monthlyPrice: s.payments.monthlyPrice,
+        yearlyPrice: s.payments.yearlyPrice,
+        trialDays: s.payments.trialDays,
+      },
     }
-    if (copy?.features) {
-      delete copy.features.enableGoogleAuth
-      delete copy.features.enableEmailNotifications
-    }
-    if (copy?.security) {
-      delete copy.security.requireEmailVerification
-      delete copy.security.enableTwoFactor
-    }
-    return copy as SystemSettings
   }
 
-  const updateSetting = (category: keyof SystemSettings, key: string, value: any) => {
+  const updateSetting = (category: keyof SystemSettings, key: string, value: unknown) => {
     if (!settings) return
     
     setSettings({
       ...settings,
       [category]: {
-        ...settings[category],
-        [key]: value
-      }
+        ...(settings[category] as Record<string, unknown>),
+        [key]: value,
+      } as SystemSettings[typeof category],
     })
     setHasChanges(true)
   }

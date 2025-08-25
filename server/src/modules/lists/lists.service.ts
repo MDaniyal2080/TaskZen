@@ -256,20 +256,51 @@ export class ListsService {
       throw new ForbiddenException('Viewers cannot update lists');
     }
 
-    const updated = await this.prisma.list.update({
-      where: { id },
-      data: { position },
+    // Load all non-archived lists for this board to compute the new order
+    const lists = await this.prisma.list.findMany({
+      where: { boardId: list.boardId, isArchived: false },
+      orderBy: { position: 'asc' },
+      select: { id: true, position: true },
     });
 
-    // Emit real-time event
-    this.ws.notifyListUpdated(list.boardId, updated);
-    // Activity: list position updated
+    const currentIndex = lists.findIndex((l) => l.id === id);
+    if (currentIndex === -1) {
+      // Should not happen since we already fetched the list
+      throw new NotFoundException('List not found');
+    }
+
+    // Treat incoming `position` as target index and clamp
+    const targetIndex = Math.max(0, Math.min(position, lists.length - 1));
+
+    let reordered = lists;
+    if (currentIndex !== targetIndex) {
+      reordered = lists.slice();
+      const [moved] = reordered.splice(currentIndex, 1);
+      reordered.splice(targetIndex, 0, moved);
+    }
+
+    // Reindex all positions to sequential integers based on the new order
+    const updates = reordered
+      .map((l, idx) => (l.position !== idx ? this.prisma.list.update({ where: { id: l.id }, data: { position: idx } }) : null))
+      .filter((u): u is NonNullable<typeof u> => Boolean(u));
+
+    if (updates.length) {
+      await this.prisma.$transaction(updates);
+    }
+
+    // Fetch the moved list after normalization so we can emit the event
+    const updated = await this.prisma.list.findUnique({ where: { id } });
+
+    // Emit real-time event (moved list only). Clients will reorder locally.
+    this.ws.notifyListUpdated(list.boardId, updated!);
+
+    // Activity: list position updated (use from/to indices)
     const activity = await this.prisma.activity.create({
       data: {
         type: ActivityType.LIST_UPDATED,
         userId,
         boardId: list.boardId,
-        data: { id, fromPosition: list.position, toPosition: position },
+        data: { id, fromPosition: currentIndex, toPosition: targetIndex },
       },
       include: {
         user: {

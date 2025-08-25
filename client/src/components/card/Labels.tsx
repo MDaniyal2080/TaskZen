@@ -1,10 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Tag, Plus, X, Edit2, Check } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, X, Edit2, Check } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useAuthStore } from '@/store/auth';
 import toast from 'react-hot-toast';
+
+// HTTP error helpers
+const getHttpStatus = (error: unknown): number | undefined =>
+  (error as { response?: { status?: number } })?.response?.status;
+const getErrorMessage = (error: unknown): string | undefined =>
+  (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
 
 interface Label {
   id: string;
@@ -41,13 +46,8 @@ export function Labels({ cardId, boardId }: LabelsProps) {
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[0]);
   const [editingLabel, setEditingLabel] = useState<Label | null>(null);
-  const { user } = useAuthStore();
 
-  useEffect(() => {
-    fetchLabels();
-  }, [cardId, boardId]);
-
-  const fetchLabels = async () => {
+  const fetchLabels = useCallback(async () => {
     try {
       const [cardRes, boardRes] = await Promise.all([
         api.get(`/labels/card/${cardId}`),
@@ -55,10 +55,14 @@ export function Labels({ cardId, boardId }: LabelsProps) {
       ]);
       setCardLabels(cardRes.data);
       setBoardLabels(boardRes.data);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to fetch labels:', error);
     }
-  };
+  }, [cardId, boardId]);
+
+  useEffect(() => {
+    fetchLabels();
+  }, [fetchLabels]);
 
   const handleCreateLabel = async () => {
     if (!newLabelName.trim()) return;
@@ -74,11 +78,11 @@ export function Labels({ cardId, boardId }: LabelsProps) {
       setNewLabelColor(LABEL_COLORS[0]);
       setShowCreateForm(false);
       toast.success('Label created');
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      if (getHttpStatus(error) === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to create label');
+        toast.error(getErrorMessage(error) || 'Failed to create label');
       }
     }
   };
@@ -93,11 +97,11 @@ export function Labels({ cardId, boardId }: LabelsProps) {
       setCardLabels(cardLabels.map(l => l.id === label.id ? response.data : l));
       setEditingLabel(null);
       toast.success('Label updated');
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      if (getHttpStatus(error) === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to update label');
+        toast.error(getErrorMessage(error) || 'Failed to update label');
       }
     }
   };
@@ -110,11 +114,11 @@ export function Labels({ cardId, boardId }: LabelsProps) {
       setBoardLabels(boardLabels.filter(l => l.id !== labelId));
       setCardLabels(cardLabels.filter(l => l.id !== labelId));
       toast.success('Label deleted');
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      if (getHttpStatus(error) === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to delete label');
+        toast.error(getErrorMessage(error) || 'Failed to delete label');
       }
     }
   };
@@ -132,11 +136,11 @@ export function Labels({ cardId, boardId }: LabelsProps) {
         setCardLabels([...cardLabels, label]);
         toast.success('Label added');
       }
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      if (getHttpStatus(error) === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to toggle label');
+        toast.error(getErrorMessage(error) || 'Failed to toggle label');
       }
     }
   };

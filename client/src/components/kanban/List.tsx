@@ -5,7 +5,9 @@ import { useDroppable } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
+  useSortable,
 } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Plus, MoreHorizontal, X, Edit2 } from 'lucide-react';
 import { Card } from './Card';
 import toast from 'react-hot-toast';
@@ -45,9 +47,15 @@ export function List({ list, cards }: ListProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
 
-  const { setNodeRef } = useDroppable({
-    id: list.id,
-  });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: list.id });
+  const { setNodeRef: setDroppableNodeRef } = useDroppable({ id: `list-droppable-${list.id}` });
 
   // Position and close List header menu when open
   useEffect(() => {
@@ -164,9 +172,18 @@ export function List({ list, cards }: ListProps) {
     <div
       ref={setNodeRef}
       className="md:w-full w-auto shrink-0 md:shrink min-w-[86vw] sm:min-w-[22rem] md:min-w-0 snap-start bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-lg shadow-md border border-slate-200 dark:border-slate-600 h-fit max-h-full flex flex-col"
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.6 : undefined,
+      }}
     >
       {/* List Header */}
-      <div className={cn("border-b border-slate-200 dark:border-slate-600", compact ? 'p-2' : 'p-3')}>
+      <div
+        className={cn("border-b border-slate-200 dark:border-slate-600 cursor-grab active:cursor-grabbing", compact ? 'p-2' : 'p-3')}
+        {...attributes}
+        {...listeners}
+      >
         <div className="flex items-center justify-between">
           {isEditingTitle ? (
             <input
@@ -202,8 +219,8 @@ export function List({ list, cards }: ListProps) {
       </div>
 
       {/* Cards Container */}
-      <div className={cn("flex-1 overflow-y-auto min-h-[100px] custom-scrollbar pr-1", compact ? 'p-1.5 space-y-1' : 'p-2 space-y-2')}>
-        <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+      <div ref={setDroppableNodeRef} className={cn("flex-1 overflow-y-auto min-h-[100px] custom-scrollbar pr-1", compact ? 'p-1.5 space-y-1' : 'p-2 space-y-2')}>
+        <SortableContext id={list.id} items={cardIds} strategy={verticalListSortingStrategy}>
           {sortedCards.map((card) => (
             <Card key={card.id} card={card} />
           ))}

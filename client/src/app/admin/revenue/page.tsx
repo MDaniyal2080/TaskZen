@@ -60,18 +60,18 @@ export default function AdminRevenuePage() {
     URL.revokeObjectURL(url)
   }
 
-  const statusVariant = (status: string) => {
+  const statusVariant = (status: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (status) {
       case 'succeeded':
-        return 'default' as const
+        return 'default'
       case 'pending':
-        return 'secondary' as const
+        return 'secondary'
       case 'refunded':
-        return 'outline' as const
+        return 'outline'
       case 'failed':
-        return 'destructive' as const
+        return 'destructive'
       default:
-        return 'outline' as const
+        return 'outline'
     }
   }
 
@@ -264,7 +264,7 @@ export default function AdminRevenuePage() {
                       <td className="py-2 pr-4">{t.plan}</td>
                       <td className="py-2 pr-4">${t.amount.toLocaleString()} {t.currency?.toUpperCase?.() ?? 'USD'}</td>
                       <td className="py-2 pr-4">
-                        <Badge variant={statusVariant(t.status) as any}>{t.status}</Badge>
+                        <Badge variant={statusVariant(t.status)}>{t.status}</Badge>
                       </td>
                       <td className="py-2 pr-4">{new Date(t.createdAt).toLocaleString()}</td>
                     </tr>

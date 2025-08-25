@@ -12,17 +12,20 @@ import {
   DragOverlay,
   closestCorners,
 } from '@dnd-kit/core';
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 // Removed unused imports from '@dnd-kit/sortable'
 import { Plus, MoreHorizontal, Filter, Calendar, LayoutGrid, SortAsc, SortDesc, Users, X, Activity } from 'lucide-react';
 import { List } from './List';
 import { Card } from './Card';
-import { useBoardStore } from '@/store/board-store';
+import { useBoardStore, extractMessage } from '@/store/board-store';
+import type { BoardPayload, ListPayload, CardPayload } from '@/store/board-store';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { saveAsTemplate, BOARD_THEMES, BOARD_BACKGROUNDS } from '@/lib/boards';
 import { CalendarView } from '@/components/calendar/CalendarView';
+import type { CalendarSortBy } from '@/components/calendar/CalendarView';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createPortal } from 'react-dom';
 import { BoardMembers } from '@/components/board/BoardMembers';
@@ -30,13 +33,91 @@ import { ActivityLogs } from '@/components/activity/ActivityLogs';
 import { cn } from '@/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import type { List as ListType, Card as CardType, Label, User, Priority } from '@/shared/types';
+
+// Local view types and mappers to satisfy strict component props
+type LabelOrRelation = Label | { label: Label };
+type CardView = CardType & {
+  _count?: { comments?: number; attachments?: number } | null;
+  labels?: LabelOrRelation[];
+  assignee?: User;
+};
+
+const toDate = (v: unknown): string | undefined => {
+  if (typeof v === 'string' || typeof v === 'number' || v instanceof Date) {
+    const d = new Date(v as string | number | Date);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return undefined;
+};
+
+const toPriority = (p: unknown): Priority => {
+  const s = typeof p === 'string' ? p.toUpperCase() : '';
+  switch (s) {
+    case 'LOW':
+    case 'MEDIUM':
+    case 'HIGH':
+    case 'URGENT':
+      return s as Priority;
+    default:
+      return 'MEDIUM' as Priority;
+  }
+};
+
+const toCardView = (p: CardPayload): CardView | null => {
+  const listId =
+    typeof p.listId === 'string'
+      ? p.listId
+      : (p.list && typeof p.list.id === 'string' ? (p.list.id as string) : null);
+  if (!listId) return null;
+  const createdAt = toDate((p as Record<string, unknown>).createdAt) ?? new Date().toISOString();
+  const updatedAt = toDate((p as Record<string, unknown>).updatedAt) ?? new Date().toISOString();
+  return {
+    id: p.id,
+    title: typeof p.title === 'string' && p.title.length > 0 ? p.title : 'Untitled',
+    description: typeof p.description === 'string' ? p.description : undefined,
+    position: typeof p.position === 'number' ? p.position : 0,
+    dueDate: toDate(p.dueDate ?? (p as Record<string, unknown>).dueDate),
+    isCompleted:
+      typeof p.isCompleted === 'boolean'
+        ? p.isCompleted
+        : (typeof (p as Record<string, unknown>).completed === 'boolean'
+            ? ((p as Record<string, unknown>).completed as boolean)
+            : false),
+    isArchived:
+      typeof (p as Record<string, unknown>).isArchived === 'boolean'
+        ? ((p as Record<string, unknown>).isArchived as boolean)
+        : false,
+    priority: toPriority(p.priority),
+    color: typeof p.color === 'string' ? p.color : undefined,
+    listId,
+    assigneeId: typeof p.assigneeId === 'string' ? p.assigneeId : undefined,
+    createdAt,
+    updatedAt,
+    _count: p._count,
+  };
+};
+
+const toListType = (p: ListPayload, fallbackBoardId: string): ListType => {
+  const createdAt = toDate((p as Record<string, unknown>).createdAt) ?? new Date().toISOString();
+  const updatedAt = toDate((p as Record<string, unknown>).updatedAt) ?? new Date().toISOString();
+  return {
+    id: p.id,
+    title: typeof p.title === 'string' && p.title.length > 0 ? p.title : 'Untitled List',
+    position: typeof p.position === 'number' ? p.position : 0,
+    isArchived: typeof p.isArchived === 'boolean' ? p.isArchived : false,
+    boardId: typeof p.boardId === 'string' ? p.boardId : fallbackBoardId,
+    createdAt,
+    updatedAt,
+  };
+};
 
 interface BoardProps {
   boardId: string;
 }
 
 export function Board({ boardId }: BoardProps) {
-  const { board, lists, cards, setBoardFromData, createList, moveCard, presentUserIds } = useBoardStore();
+  const { board, lists, cards, setBoardFromData, createList, moveCard, moveList, presentUserIds } = useBoardStore();
   const { user } = useAuthStore();
   const boardPrefs = user?.uiPreferences?.board || {};
   const compact = !!boardPrefs.compactCardView;
@@ -80,8 +161,22 @@ export function Board({ boardId }: BoardProps) {
     dueDate: searchParams.get('dueDate') || 'all',
     completed: searchParams.get('completed') || 'all'
   });
-  const [sortBy, setSortBy] = useState(searchParams.get('sortBy') || 'position');
+  const isCalendarSortBy = (v: string | null): v is CalendarSortBy =>
+    v === 'position' || v === 'title' || v === 'dueDate' || v === 'priority' || v === 'createdAt';
+  const toSortBy = (v: string | null): CalendarSortBy => (isCalendarSortBy(v) ? v : 'position');
+  const [sortBy, setSortBy] = useState<CalendarSortBy>(toSortBy(searchParams.get('sortBy')));
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>((searchParams.get('sortOrder') as 'asc' | 'desc') || 'asc');
+
+  const getStatus = (err: unknown): number | undefined => {
+    if (typeof err === 'object' && err !== null && 'response' in err) {
+      const resp = (err as { response?: unknown }).response;
+      if (typeof resp === 'object' && resp !== null && 'status' in resp) {
+        const status = (resp as { status?: unknown }).status;
+        if (typeof status === 'number') return status;
+      }
+    }
+    return undefined;
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -112,12 +207,11 @@ export function Board({ boardId }: BoardProps) {
   // Handle query errors with toast
   useEffect(() => {
     if (isBoardError) {
-      const anyErr: any = boardError as any;
-      const status = anyErr?.response?.status;
+      const status = getStatus(boardError);
       if (status === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(anyErr?.response?.data?.message || 'Failed to fetch board');
+        toast.error(extractMessage(boardError) ?? 'Failed to fetch board');
       }
     }
   }, [isBoardError, boardError]);
@@ -216,7 +310,11 @@ export function Board({ boardId }: BoardProps) {
     if (!over) return;
 
     const activeId = active.id as string;
-    const overId = over.id as string;
+    let overId = over.id as string;
+    // Support droppable container ids like 'list-droppable-<id>' coming from List.tsx
+    if (typeof overId === 'string' && overId.startsWith('list-droppable-')) {
+      overId = overId.replace('list-droppable-', '');
+    }
 
     if (activeId === overId) return;
 
@@ -229,6 +327,8 @@ export function Board({ boardId }: BoardProps) {
     if (overCard) {
       const targetListId = overCard.listId;
       const targetIndex = overCard.position;
+      // Narrow types: require a definite listId and numeric position
+      if (!targetListId || typeof targetIndex !== 'number') return;
       // Guard to avoid redundant updates
       if (activeCard.listId === targetListId && activeCard.position === targetIndex) return;
       moveCard(activeId, targetListId, targetIndex);
@@ -252,7 +352,47 @@ export function Board({ boardId }: BoardProps) {
     if (!over) return;
 
     const activeId = active.id as string;
-    const overId = over.id as string;
+    let overId = over.id as string;
+    if (typeof overId === 'string' && overId.startsWith('list-droppable-')) {
+      overId = overId.replace('list-droppable-', '');
+    }
+    // Handle list reordering first
+    const activeListIndex = lists.findIndex(l => l.id === activeId);
+    if (activeListIndex !== -1) {
+      // Determine target index from the droppable we are over (could be list or a card within a list)
+      let overIndex = lists.findIndex(l => l.id === overId);
+      if (overIndex === -1) {
+        const overCardForList = cards.find(c => c.id === overId);
+        if (overCardForList) {
+          overIndex = lists.findIndex(l => l.id === overCardForList.listId);
+        }
+      }
+
+      if (overIndex === -1 || overIndex === activeListIndex) return;
+
+      // Adjust index when moving forward to account for removal before insertion
+      const newIndex = activeListIndex < overIndex ? overIndex - 1 : overIndex;
+
+      // Optimistic update
+      moveList(activeId, newIndex);
+
+      try {
+        await api.patch(`/lists/${activeId}/position`, { position: newIndex });
+      } catch (error: unknown) {
+        console.error('Failed to update list position:', error);
+        const status = getStatus(error);
+        if (status === 403) {
+          toast.error('You have read-only access on this board');
+        } else {
+          toast.error(extractMessage(error) ?? 'Failed to move list');
+        }
+        // Revert changes
+        await refetchBoard();
+      }
+      return;
+    }
+
+    // Otherwise, handle card movement
     const activeCard = cards.find(c => c.id === activeId);
     if (!activeCard) return;
 
@@ -262,8 +402,8 @@ export function Board({ boardId }: BoardProps) {
     let targetIndex: number | null = null;
 
     if (overCard) {
-      targetListId = overCard.listId;
-      targetIndex = overCard.position;
+      targetListId = overCard.listId ?? null;
+      targetIndex = typeof overCard.position === 'number' ? overCard.position : null;
     } else {
       const overList = lists.find(l => l.id === overId);
       if (overList) {
@@ -285,12 +425,13 @@ export function Board({ boardId }: BoardProps) {
         listId: targetListId,
         position: targetIndex,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to update card position:', error);
-      if (error?.response?.status === 403) {
+      const status = getStatus(error);
+      if (status === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to move card');
+        toast.error(extractMessage(error) ?? 'Failed to move card');
       }
       // Revert changes
       await refetchBoard();
@@ -305,17 +446,19 @@ export function Board({ boardId }: BoardProps) {
       setNewListTitle('');
       setShowAddList(false);
       toast.success('List created successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create list:', error);
-      if (error?.response?.status === 403) {
+      const status = getStatus(error);
+      if (status === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to create list');
+        toast.error(extractMessage(error) ?? 'Failed to create list');
       }
     }
   };
-
-  const canEdit = !!user && (board?.ownerId === user.id || (board?.members || []).some((m: any) => m.userId === user.id && (m.role === 'OWNER' || m.role === 'ADMIN')));
+  
+  const members = board?.members ?? [];
+  const canEdit = !!user && (board?.ownerId === user.id || members.some((m) => m.userId === user.id && (m.role === 'OWNER' || m.role === 'ADMIN')));
   const canDelete = !!user && board?.ownerId === user.id;
 
   const handleUpdateBoard = async () => {
@@ -338,12 +481,13 @@ export function Board({ boardId }: BoardProps) {
       setShowEdit(false);
       // Invalidate to refresh board data in background
       queryClient.invalidateQueries({ queryKey: ['board', boardId] });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to update board:', error);
-      if (error?.response?.status === 403) {
+      const status = getStatus(error);
+      if (status === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to update board');
+        toast.error(extractMessage(error) ?? 'Failed to update board');
       }
     } finally {
       setSaving(false);
@@ -360,12 +504,13 @@ export function Board({ boardId }: BoardProps) {
       await api.delete(`/boards/${boardId}`);
       toast.success('Board deleted successfully');
       router.push('/boards');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to delete board:', error);
-      if (error?.response?.status === 403) {
+      const status = getStatus(error);
+      if (status === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to delete board');
+        toast.error(extractMessage(error) ?? 'Failed to delete board');
       }
     } finally {
       setDeleting(false);
@@ -378,12 +523,13 @@ export function Board({ boardId }: BoardProps) {
       const template = await saveAsTemplate(boardId);
       toast.success(`Board saved as template: ${template.name}`);
       setShowMenu(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to save as template:', error);
-      if (error?.response?.status === 403) {
+      const status = getStatus(error);
+      if (status === 403) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to save board as template');
+        toast.error(extractMessage(error) ?? 'Failed to save board as template');
       }
     } finally {
       setSavingTemplate(false);
@@ -391,7 +537,7 @@ export function Board({ boardId }: BoardProps) {
   };
 
   // Filter and sort cards
-  const getFilteredAndSortedCards = (listId: string) => {
+  const getFilteredAndSortedCards = (listId: string): CardView[] => {
     let filteredCards = cards.filter(c => c.listId === listId);
     
     // Apply filters
@@ -432,42 +578,57 @@ export function Board({ boardId }: BoardProps) {
     
     // Apply sorting
     filteredCards.sort((a, b) => {
-      let aVal, bVal;
-      
       switch (sortBy) {
-        case 'title':
-          aVal = a.title.toLowerCase();
-          bVal = b.title.toLowerCase();
-          break;
-        case 'dueDate':
-          aVal = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
-          bVal = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
-          break;
-        case 'priority':
-          const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
-          aVal = priorityOrder[a.priority as keyof typeof priorityOrder] || 0;
-          bVal = priorityOrder[b.priority as keyof typeof priorityOrder] || 0;
-          break;
-        case 'createdAt':
-          aVal = new Date(a.createdAt).getTime();
-          bVal = new Date(b.createdAt).getTime();
-          break;
+        case 'title': {
+          const aTitle = (typeof a.title === 'string' ? a.title : '').toLowerCase();
+          const bTitle = (typeof b.title === 'string' ? b.title : '').toLowerCase();
+          const cmp = aTitle.localeCompare(bTitle);
+          return sortOrder === 'asc' ? cmp : -cmp;
+        }
+        case 'dueDate': {
+          const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+          if (aTime < bTime) return sortOrder === 'asc' ? -1 : 1;
+          if (aTime > bTime) return sortOrder === 'asc' ? 1 : -1;
+          return 0;
+        }
+        case 'priority': {
+          const priorityOrder = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 } as const;
+          const aNum = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 0;
+          const bNum = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 0;
+          if (aNum < bNum) return sortOrder === 'asc' ? -1 : 1;
+          if (aNum > bNum) return sortOrder === 'asc' ? 1 : -1;
+          return 0;
+        }
+        case 'createdAt': {
+          const toTime = (v: unknown): number =>
+            (typeof v === 'string' || typeof v === 'number' || v instanceof Date)
+              ? new Date(v as string | number | Date).getTime()
+              : 0;
+          const aTime = toTime((a as Record<string, unknown>).createdAt);
+          const bTime = toTime((b as Record<string, unknown>).createdAt);
+          if (aTime < bTime) return sortOrder === 'asc' ? -1 : 1;
+          if (aTime > bTime) return sortOrder === 'asc' ? 1 : -1;
+          return 0;
+        }
         case 'position':
-        default:
-          aVal = a.position;
-          bVal = b.position;
-          break;
+        default: {
+          const aPos = typeof a.position === 'number' ? a.position : 0;
+          const bPos = typeof b.position === 'number' ? b.position : 0;
+          if (aPos < bPos) return sortOrder === 'asc' ? -1 : 1;
+          if (aPos > bPos) return sortOrder === 'asc' ? 1 : -1;
+          return 0;
+        }
       }
-      
-      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
     });
     
-    return filteredCards;
+    return filteredCards
+      .map(toCardView)
+      .filter((c): c is CardView => !!c);
   };
   
-  const activeCard = activeId ? cards.find(c => c.id === activeId) : null;
+  const activeCardPayload = activeId ? cards.find(c => c.id === activeId) : null;
+  const activeCard = activeCardPayload ? toCardView(activeCardPayload) : null;
 
   if (!board) {
     return (
@@ -568,11 +729,21 @@ export function Board({ boardId }: BoardProps) {
             {presentUserIds?.length > 0 && (
               <div className="ml-1 flex -space-x-2 items-center">
                 {presentUserIds.slice(0, 5).map((uid: string) => {
-                  const getUserById = (id: string) => {
-                    if (!board) return null as any;
+                  const getUserById = (id: string): BoardPayload['owner'] => {
+                    if (!board) return null;
                     if (board.owner && board.owner.id === id) return board.owner;
-                    const member = (board.members || []).find((m: any) => m.userId === id || m.user?.id === id);
-                    return member?.user || null;
+                    const members = Array.isArray(board.members) ? board.members : [];
+                    const member = members.find((m) => m.userId === id || m.user?.id === id);
+                    if (!member) return null;
+                    // Prefer full user object when it contains a definite id
+                    if (member.user && typeof member.user.id === 'string') {
+                      return { ...member.user, id: member.user.id } as BoardPayload['owner'];
+                    }
+                    // Fallback: construct a minimal user with the known id
+                    if (typeof member.userId === 'string') {
+                      return { id: member.userId } as BoardPayload['owner'];
+                    }
+                    return null;
                   };
                   const u = getUserById(uid);
                   const label = (u?.firstName && u?.lastName) ? `${u.firstName} ${u.lastName}` : (u?.firstName || u?.username || 'User');
@@ -778,9 +949,10 @@ export function Board({ boardId }: BoardProps) {
               <div className="flex items-center gap-2">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Sort:</label>
                 <Select value={sortBy} onValueChange={(value) => {
-                  setSortBy(value);
+                  const next = isCalendarSortBy(value) ? value : 'position';
+                  setSortBy(next);
                   const params = new URLSearchParams(searchParams.toString());
-                  if (value === 'position') params.delete('sortBy'); else params.set('sortBy', value);
+                  if (next === 'position') params.delete('sortBy'); else params.set('sortBy', next);
                   const qs = params.toString();
                   router.replace(`${pathname}${qs ? `?${qs}` : ''}`);
                 }}>
@@ -841,7 +1013,7 @@ export function Board({ boardId }: BoardProps) {
               completed: filters.completed,
               dueDate: filters.dueDate,
             }}
-            sortBy={sortBy as any}
+            sortBy={sortBy}
             sortOrder={sortOrder}
           />
         ) : (
@@ -857,13 +1029,15 @@ export function Board({ boardId }: BoardProps) {
             compact ? 'gap-3 md:gap-4' : 'gap-6 md:gap-7',
             "md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           )}>
-            {lists.map((list) => (
-              <List
-                key={list.id}
-                list={list}
-                cards={getFilteredAndSortedCards(list.id)}
-              />
-            ))}
+            <SortableContext items={lists.map(l => l.id)} strategy={horizontalListSortingStrategy}>
+              {lists.map((list) => (
+                <List
+                  key={list.id}
+                  list={toListType(list, boardId)}
+                  cards={getFilteredAndSortedCards(list.id)}
+                />
+              ))}
+            </SortableContext>
 
             {/* Add List Button */}
             <div className="w-full min-w-[86vw] sm:min-w-[20rem] md:min-w-0 shrink-0 md:shrink snap-start">

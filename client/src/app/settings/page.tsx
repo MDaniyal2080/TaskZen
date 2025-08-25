@@ -14,11 +14,25 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { toast } from 'react-hot-toast'
 import { 
   User, Settings, Bell, Shield, Palette, Moon, Sun, 
-  Mail, Lock, Camera, Save, Crown, AlertCircle, 
-  CheckCircle, Clock, Activity, Zap
+  Lock, Camera, Save, Crown, AlertCircle, 
+  CheckCircle, Activity, Zap
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useSettings } from '@/contexts/SettingsContext'
+
+// Safely extract API error message
+function extractErrorMessage(e: unknown, fallback: string) {
+  if (
+    e &&
+    typeof e === 'object' &&
+    'response' in e &&
+    (e as { response?: { data?: { message?: unknown } } }).response
+  ) {
+    const msg = (e as { response?: { data?: { message?: unknown } } }).response?.data?.message
+    if (typeof msg === 'string') return msg
+  }
+  return fallback
+}
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -86,7 +100,7 @@ export default function SettingsPage() {
         try {
           const { data } = await api.get(`/users/${user.id}/notifications`)
           setNotifications((prev) => ({ ...prev, ...data }))
-        } catch (err) {
+        } catch {
           // ignore; will use defaults
         }
         try {
@@ -98,7 +112,7 @@ export default function SettingsPage() {
               enableAnimations: ui?.board?.enableAnimations ?? prev.board.enableAnimations,
             },
           }))
-        } catch (err) {
+        } catch {
           // ignore; will use defaults
         }
       })()
@@ -116,8 +130,8 @@ export default function SettingsPage() {
         await fetchMe()
         toast.success('Profile updated successfully!')
       }
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Failed to update profile')
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to update profile'))
     } finally {
       setLoading(false)
     }
@@ -147,8 +161,8 @@ export default function SettingsPage() {
         newPassword: '',
         confirmPassword: ''
       })
-    } catch (error: any) {
-      toast.error(error?.response?.data?.message || 'Failed to change password')
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to change password'))
     } finally {
       setLoading(false)
     }
@@ -159,8 +173,8 @@ export default function SettingsPage() {
     try {
       await api.put(`/users/${user?.id}/notifications`, notifications)
       toast.success('Notification preferences updated!')
-    } catch (error: any) {
-      toast.error('Failed to update notifications')
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to update notifications'))
     } finally {
       setLoading(false)
     }
@@ -172,8 +186,8 @@ export default function SettingsPage() {
       await api.put(`/users/${user?.id}/ui-preferences`, uiPrefs)
       toast.success('Appearance preferences updated!')
       await fetchMe()
-    } catch (error: any) {
-      toast.error('Failed to update appearance preferences')
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to update appearance preferences'))
     } finally {
       setLoading(false)
     }
@@ -202,8 +216,8 @@ export default function SettingsPage() {
         setProfileData((prev) => ({ ...prev, avatar: res.data.user.avatar || '' }))
         toast.success('Avatar updated!')
       }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to upload avatar')
+    } catch (error: unknown) {
+      toast.error(extractErrorMessage(error, 'Failed to upload avatar'))
     } finally {
       setLoading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -525,7 +539,7 @@ export default function SettingsPage() {
                     <div className="space-y-0.5">
                       <Label htmlFor="task-assign">Task Assignments</Label>
                       <p className="text-sm text-gray-500">
-                        When you're assigned to a task
+                        When you&apos;re assigned to a task
                       </p>
                     </div>
                     <Switch 

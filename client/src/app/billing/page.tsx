@@ -8,7 +8,7 @@ import { toast } from 'react-hot-toast'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Crown, ArrowLeft, Calendar, CreditCard, CheckCircle, XCircle, Sparkles, Check, X, Zap, Users, Shield, Palette, Clock, Archive } from 'lucide-react'
+ import { Crown, ArrowLeft, XCircle, Sparkles, Check, X, Zap } from 'lucide-react'
 import { useSettings } from '@/contexts/SettingsContext'
 
 const features = [
@@ -51,7 +51,16 @@ export default function BillingPage() {
   const formatDate = (d?: string | Date | null) => {
     if (!d) return '—'
     const date = typeof d === 'string' ? new Date(d) : d
-    return date.toLocaleString()
+    return date.toLocaleDateString()
+  }
+
+  const getErrorMessage = (err: unknown, fallback: string) => {
+    if (typeof err === 'object' && err !== null) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string }
+      if (e.response?.data?.message) return e.response.data.message
+      if (typeof e.message === 'string') return e.message
+    }
+    return fallback
   }
 
   const handleUpgrade = async (duration: 'monthly' | 'yearly') => {
@@ -62,8 +71,8 @@ export default function BillingPage() {
         toast.success(`Upgraded to Pro (${duration})`)
         await fetchMe()
       }
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Upgrade failed')
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, 'Upgrade failed'))
     } finally {
       setLoading(null)
     }
@@ -77,8 +86,8 @@ export default function BillingPage() {
         toast.success('Downgraded to Free')
         await fetchMe()
       }
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Downgrade failed')
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, 'Downgrade failed'))
     } finally {
       setLoading(null)
     }
@@ -133,13 +142,13 @@ export default function BillingPage() {
                   <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                     <div className="text-sm text-gray-600 dark:text-gray-400">Member Since</div>
                     <div className="font-semibold mt-1">
-                      {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                      {formatDate(user?.createdAt ?? null)}
                     </div>
                   </div>
                   <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                     <div className="text-sm text-gray-600 dark:text-gray-400">Pro Expires</div>
                     <div className="font-semibold mt-1">
-                      {isPro && user?.proExpiresAt ? new Date(user.proExpiresAt).toLocaleDateString() : '—'}
+                      {isPro ? formatDate(user?.proExpiresAt ?? null) : '—'}
                     </div>
                   </div>
                 </div>
@@ -309,7 +318,7 @@ export default function BillingPage() {
           <Card className="mb-8">
             <CardHeader>
               <CardTitle>Feature Comparison</CardTitle>
-              <CardDescription>See what's included in each plan</CardDescription>
+              <CardDescription>See what&apos;s included in each plan</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -372,7 +381,7 @@ export default function BillingPage() {
                   <XCircle className="w-4 h-4 mr-2"/> Downgrade to Free
                 </Button>
                 <span className="text-sm text-gray-600 dark:text-gray-400">
-                  You'll keep Pro features until {user?.proExpiresAt ? new Date(user.proExpiresAt).toLocaleDateString() : 'expiry'}
+                  You&apos;ll keep Pro features until {user?.proExpiresAt ? formatDate(user.proExpiresAt) : 'expiry'}
                 </span>
               </CardFooter>
             </Card>

@@ -13,7 +13,7 @@ export default function BoardPage() {
   const router = useRouter();
   const boardId = params.id as string;
   const { user } = useAuthStore();
-  const { connect, disconnect, socket, connected } = useSocketStore();
+  const { connect, disconnect, socket, connected, realtimeDisabled } = useSocketStore();
   const {
     handleBoardUpdate,
     handleListCreated,
@@ -26,6 +26,9 @@ export default function BoardPage() {
     handleCommentCreated,
     handleCommentUpdated,
     handleCommentDeleted,
+    handlePresenceUpdated,
+    handleTypingStarted,
+    handleTypingStopped,
     handleActivityCreated,
     handleMemberAdded,
     handleMemberRemoved,
@@ -42,7 +45,7 @@ export default function BoardPage() {
     return () => {
       disconnect();
     };
-  }, [user?.id]);
+  }, [user, connect, disconnect, router]);
 
   // Join board room and subscribe to events when socket is ready
   useEffect(() => {
@@ -50,13 +53,16 @@ export default function BoardPage() {
 
     socket.emit('joinBoard', { boardId });
 
-    const onJoined = (payload: any) => {
+    const onJoined = (payload: unknown) => {
       console.debug('[BoardPage] joinedBoard', payload);
     };
     socket.on('joinedBoard', onJoined);
-    const onAccessDenied = (payload: any) => {
+    const onAccessDenied = (payload: unknown) => {
       console.warn('[BoardPage] accessDenied', payload);
-      try { toast.error(payload?.message || 'You do not have access to this board'); } catch {}
+      const msg = (payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message?: unknown }).message === 'string')
+        ? (payload as { message?: string }).message
+        : undefined;
+      try { toast.error(msg || 'You do not have access to this board'); } catch {}
     };
     socket.on('accessDenied', onAccessDenied);
 
@@ -71,10 +77,22 @@ export default function BoardPage() {
     socket.on('commentCreated', handleCommentCreated);
     socket.on('commentUpdated', handleCommentUpdated);
     socket.on('commentDeleted', handleCommentDeleted);
+    socket.on('presenceUpdated', handlePresenceUpdated);
+    socket.on('typingStarted', handleTypingStarted);
+    socket.on('typingStopped', handleTypingStopped);
     socket.on('activityCreated', handleActivityCreated);
     socket.on('memberAdded', handleMemberAdded);
-    const onBoardDeleted = (payload: any) => {
-      const deletedBoardId = (payload as any)?.id ?? payload;
+    // Fallback event names for compatibility
+    socket.on('presenceUpdate', handlePresenceUpdated);
+    socket.on('typingStart', handleTypingStarted);
+    socket.on('typingStop', handleTypingStopped);
+    const onBoardDeleted = (payload: unknown) => {
+      let deletedBoardId: string | undefined;
+      if (typeof payload === 'string') {
+        deletedBoardId = payload;
+      } else if (payload && typeof payload === 'object' && 'id' in payload && typeof (payload as { id?: unknown }).id === 'string') {
+        deletedBoardId = (payload as { id?: string }).id;
+      }
       if (!deletedBoardId || deletedBoardId !== boardId) return;
       try {
         socket.emit('leaveBoard', { boardId });
@@ -84,14 +102,14 @@ export default function BoardPage() {
       router.replace('/boards');
     };
     socket.on('boardDeleted', onBoardDeleted);
-    const onMemberRemoved = (payload: any) => {
+    const onMemberRemoved = (payload: { userId?: string; boardId?: string }) => {
       try {
         handleMemberRemoved(payload);
-      } catch (e) {
+      } catch {
         // no-op
       }
-      const removedUserId = (payload as any)?.userId;
-      const payloadBoardId = (payload as any)?.boardId;
+      const removedUserId = payload?.userId;
+      const payloadBoardId = payload?.boardId;
       if (
         removedUserId &&
         user?.id &&
@@ -106,6 +124,7 @@ export default function BoardPage() {
           socket.emit('leaveBoard', { boardId });
         } catch {}
         resetRealtimeState();
+        try { toast.error('You have been removed from this board'); } catch {}
         router.replace('/boards');
       }
     };
@@ -124,15 +143,28 @@ export default function BoardPage() {
       socket.off('commentCreated', handleCommentCreated);
       socket.off('commentUpdated', handleCommentUpdated);
       socket.off('commentDeleted', handleCommentDeleted);
+      socket.off('presenceUpdated', handlePresenceUpdated);
+      socket.off('typingStarted', handleTypingStarted);
+      socket.off('typingStopped', handleTypingStopped);
       socket.off('activityCreated', handleActivityCreated);
       socket.off('memberAdded', handleMemberAdded);
+      socket.off('presenceUpdate', handlePresenceUpdated);
+      socket.off('typingStart', handleTypingStarted);
+      socket.off('typingStop', handleTypingStopped);
       socket.off('boardDeleted', onBoardDeleted);
       socket.off('memberRemoved', onMemberRemoved);
       socket.off('joinedBoard', onJoined);
       socket.off('accessDenied', onAccessDenied);
       resetRealtimeState();
     };
-  }, [socket, connected, boardId, user?.id, router, handleBoardUpdate, handleListCreated, handleListUpdated, handleListDeleted, handleCardCreated, handleCardUpdated, handleCardMoved, handleCardDeleted, handleCommentCreated, handleCommentUpdated, handleCommentDeleted, handleActivityCreated, handleMemberAdded, handleMemberRemoved, resetRealtimeState]);
+  }, [socket, connected, boardId, user?.id, router, handleBoardUpdate, handleListCreated, handleListUpdated, handleListDeleted, handleCardCreated, handleCardUpdated, handleCardMoved, handleCardDeleted, handleCommentCreated, handleCommentUpdated, handleCommentDeleted, handlePresenceUpdated, handleTypingStarted, handleTypingStopped, handleActivityCreated, handleMemberAdded, handleMemberRemoved, resetRealtimeState]);
+
+  // When server disables realtime dynamically, notify and reset state
+  useEffect(() => {
+    if (!realtimeDisabled) return;
+    try { toast.error('Real-time updates have been disabled by the administrator.'); } catch {}
+    resetRealtimeState();
+  }, [realtimeDisabled, resetRealtimeState]);
 
   if (!user) {
     return null;

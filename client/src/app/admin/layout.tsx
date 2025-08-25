@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ReactNode } from 'react'
+import { ReactNode, Suspense } from 'react'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,6 +19,14 @@ import { cn } from '@/lib/utils'
 import { useSettings } from '@/contexts/SettingsContext'
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </Suspense>
+  )
+}
+
+function AdminLayoutContent({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { settings } = useSettings()
@@ -118,3 +126,4 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     </div>
   )
 }
+

@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Paperclip, Download, Trash2, FileText, Image, File, X } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Paperclip, Download, FileText, Image as ImageIcon, File, X } from 'lucide-react';
+import NextImage from 'next/image';
 import { api } from '@/lib/api';
-import { useAuthStore } from '@/store/auth';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import { useSocketStore } from '@/store/socket-store';
+import { useBoardStore } from '@/store/board-store';
 
 // Build same-origin URLs so Next.js rewrite `/uploads/*` proxies to backend
 
@@ -27,20 +29,62 @@ export function Attachments({ cardId }: AttachmentsProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useAuthStore();
+  const { socket } = useSocketStore();
+  const { handleCardUpdated } = useBoardStore();
 
-  useEffect(() => {
-    fetchAttachments();
-  }, [cardId]);
+  // Error helpers
+  function extractErrorMessage(e: unknown, fallback: string) {
+    if (
+      e &&
+      typeof e === 'object' &&
+      'response' in e &&
+      (e as { response?: { data?: { message?: unknown } } }).response
+    ) {
+      const msg = (e as { response?: { data?: { message?: unknown } } }).response?.data?.message;
+      if (typeof msg === 'string') return msg;
+    }
+    return fallback;
+  }
 
-  const fetchAttachments = async () => {
+  function isForbidden(e: unknown): boolean {
+    return !!(
+      e &&
+      typeof e === 'object' &&
+      'response' in e &&
+      (e as { response?: { status?: number } }).response?.status === 403
+    );
+  }
+
+  const fetchAttachments = useCallback(async () => {
     try {
       const response = await api.get(`/attachments/card/${cardId}`);
-      setAttachments(response.data);
+      const data = Array.isArray(response.data) ? (response.data as Attachment[]) : [];
+      setAttachments(data);
     } catch (error) {
       console.error('Failed to fetch attachments:', error);
     }
-  };
+  }, [cardId]);
+
+  useEffect(() => {
+    fetchAttachments();
+  }, [fetchAttachments]);
+
+  // Realtime: listen for cardUpdated to sync attachments
+  useEffect(() => {
+    if (!socket || !cardId) return;
+    const onCardUpdated = (data: unknown) => {
+      if (!data || typeof data !== 'object') return;
+      const rec = data as Record<string, unknown> & { id?: string; attachments?: Attachment[] };
+      if (!rec.id || rec.id !== cardId) return;
+      if (Array.isArray(rec.attachments)) {
+        setAttachments(rec.attachments as Attachment[]);
+      }
+    };
+    socket.on('cardUpdated', onCardUpdated);
+    return () => {
+      socket.off('cardUpdated', onCardUpdated);
+    };
+  }, [socket, cardId]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -85,9 +129,12 @@ export function Attachments({ cardId }: AttachmentsProps) {
         size: file.size,
       });
 
-      setAttachments([complete.data, ...attachments]);
+      const next = [complete.data as Attachment, ...attachments];
+      setAttachments(next);
+      // Optimistically update board store so other UI reflects changes immediately
+      try { handleCardUpdated({ id: cardId, attachments: next, _count: { attachments: next.length } }); } catch {}
       toast.success('File uploaded successfully');
-    } catch (errPresign: any) {
+    } catch {
       // Fallback to legacy multipart upload for compatibility
       try {
         const formData = new FormData();
@@ -95,14 +142,16 @@ export function Attachments({ cardId }: AttachmentsProps) {
         const response = await api.post(`/attachments/card/${cardId}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        setAttachments([response.data, ...attachments]);
+        const next = [response.data as Attachment, ...attachments];
+        setAttachments(next);
+        try { handleCardUpdated({ id: cardId, attachments: next, _count: { attachments: next.length } }); } catch {}
         toast.success('File uploaded successfully');
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Upload failed:', error);
-        if (error?.response?.status === 403) {
+        if (isForbidden(error)) {
           toast.error('You have read-only access on this board');
         } else {
-          toast.error(error?.response?.data?.message || 'Failed to upload file');
+          toast.error(extractErrorMessage(error, 'Failed to upload file'));
         }
       }
     } finally {
@@ -117,13 +166,15 @@ export function Attachments({ cardId }: AttachmentsProps) {
 
     try {
       await api.delete(`/attachments/${id}`);
-      setAttachments(attachments.filter(a => a.id !== id));
+      const next = attachments.filter(a => a.id !== id);
+      setAttachments(next);
+      try { handleCardUpdated({ id: cardId, attachments: next, _count: { attachments: next.length } }); } catch {}
       toast.success('Attachment deleted');
-    } catch (error: any) {
-      if (error?.response?.status === 403) {
+    } catch (error: unknown) {
+      if (isForbidden(error)) {
         toast.error('You have read-only access on this board');
       } else {
-        toast.error(error?.response?.data?.message || 'Failed to delete attachment');
+        toast.error(extractErrorMessage(error, 'Failed to delete attachment'));
       }
     }
   };
@@ -138,7 +189,7 @@ export function Attachments({ cardId }: AttachmentsProps) {
 
   const getFileIcon = (mimeType: string) => {
     if (mimeType.startsWith('image/')) {
-      return <Image className="h-4 w-4" />;
+      return <ImageIcon className="h-4 w-4" />;
     }
     if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('text')) {
       return <FileText className="h-4 w-4" />;
@@ -155,11 +206,16 @@ export function Attachments({ cardId }: AttachmentsProps) {
   const getFilePreview = (attachment: Attachment) => {
     if (attachment.mimeType.startsWith('image/')) {
       return (
-        <img
-          src={resolveUrl(attachment.url)}
-          alt={attachment.originalName}
-          className="w-full h-32 object-cover rounded"
-        />
+        <div className="relative w-full h-32">
+          <NextImage
+            src={resolveUrl(attachment.url)}
+            alt={attachment.originalName}
+            fill
+            sizes="(max-width: 768px) 50vw, 33vw"
+            className="object-cover"
+            priority={false}
+          />
+        </div>
       );
     }
     return (

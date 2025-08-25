@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  Calendar,
   Clock,
   MessageSquare,
   Paperclip,
-  Tag,
   CheckCircle2,
   AlertCircle,
   MoreHorizontal,
@@ -23,7 +22,7 @@ import { createPortal } from 'react-dom';
 import { CardDetailModal } from './CardDetailModal';
 import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Card as CardType, Label, User } from '@/shared/types';
+import type { Priority, Card as CardType, Label, User } from '@/shared/types';
 
 type LabelOrRelation = Label | { label: Label };
 type CardView = CardType & {
@@ -62,7 +61,7 @@ export function Card({ card, isDragging = false }: CardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description || '');
-  const [editPriority, setEditPriority] = useState(card.priority || 'MEDIUM');
+  const [editPriority, setEditPriority] = useState<Priority>(card.priority || ('MEDIUM' as Priority));
   const [editDueDate, setEditDueDate] = useState(
     card.dueDate ? new Date(card.dueDate).toISOString().slice(0, 10) : ''
   );
@@ -307,7 +306,7 @@ export function Card({ card, isDragging = false }: CardProps) {
           <label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1 block">Priority</label>
           <select
             value={editPriority}
-            onChange={(e) => setEditPriority((e.target as HTMLSelectElement).value)}
+            onChange={(e) => setEditPriority((e.target as HTMLSelectElement).value as Priority)}
             className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-xs"
           >
             <option value="LOW">LOW</option>
@@ -328,7 +327,7 @@ export function Card({ card, isDragging = false }: CardProps) {
               setIsEditing(false);
               setTitle(card.title);
               setDescription(card.description || '');
-              setEditPriority(card.priority || 'MEDIUM');
+              setEditPriority(card.priority || ('MEDIUM' as Priority));
               setEditDueDate(card.dueDate ? new Date(card.dueDate).toISOString().slice(0, 10) : '');
             }}
             className="px-3 py-1 text-slate-600 dark:text-slate-300 text-sm hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -445,18 +444,18 @@ export function Card({ card, isDragging = false }: CardProps) {
           </span>
 
           {/* Attachments */}
-          {(card.attachments?.length > 0 || card._count?.attachments > 0) && (
+          {(((card.attachments?.length ?? 0) > 0) || ((card._count?.attachments ?? 0) > 0)) && (
             <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
               <Paperclip className="w-3 h-3" />
-              <span className="text-xs">{card.attachments?.length || card._count?.attachments || 0}</span>
+              <span className="text-xs">{card.attachments?.length ?? card._count?.attachments ?? 0}</span>
             </div>
           )}
 
           {/* Comments */}
-          {(card.comments?.length > 0 || card._count?.comments > 0) && (
+          {(((card.comments?.length ?? 0) > 0) || ((card._count?.comments ?? 0) > 0)) && (
             <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
               <MessageSquare className="w-3 h-3" />
-              <span className="text-xs">{card.comments?.length || card._count?.comments || 0}</span>
+              <span className="text-xs">{card.comments?.length ?? card._count?.comments ?? 0}</span>
             </div>
           )}
         </div>
@@ -465,10 +464,12 @@ export function Card({ card, isDragging = false }: CardProps) {
         {card.assignee && (
           <div className="flex items-center gap-1">
             {card.assignee.avatar ? (
-              <img 
-                src={card.assignee.avatar} 
+              <Image
+                src={card.assignee.avatar}
                 alt={card.assignee.username}
-                className="w-5 h-5 rounded-full"
+                width={20}
+                height={20}
+                className="rounded-full"
               />
             ) : (
               <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-medium">

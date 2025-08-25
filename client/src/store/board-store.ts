@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 
 // Lightweight payload types used by the board store to avoid `any` while
 // remaining flexible about backend response shapes.
-type CardPayload = {
+export type CardPayload = {
   id: string;
   title?: string;
   description?: string;
@@ -22,7 +22,7 @@ type CardPayload = {
   _count?: { comments?: number; attachments?: number };
 } & Record<string, unknown>;
 
-type ListPayload = {
+export type ListPayload = {
   id: string;
   title?: string;
   position?: number | null;
@@ -31,10 +31,44 @@ type ListPayload = {
   cards?: CardPayload[] | null;
 } & Record<string, unknown>;
 
-type BoardPayload = {
+// Lightweight member payload to improve type-safety without over-constraining
+export type BoardMemberPayload = {
+  id?: string;
+  userId?: string;
+  role?: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER' | string;
+  user?: {
+    id?: string;
+    username?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  } | null;
+} & Record<string, unknown>;
+
+export type BoardPayload = {
   id: string;
+  // Explicit fields used throughout the UI
+  title: string;
+  description?: string | null;
+  color: string;
+  background?: string | null;
+  theme?: string;
+  isPrivate?: boolean;
+  isArchived?: boolean;
+  ownerId?: string;
+  owner?: {
+    id: string;
+    username?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    avatar?: string;
+  } | null;
+  members?: BoardMemberPayload[];
   lists?: ListPayload[] | null;
-  members?: Array<Record<string, unknown>>;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 } & Record<string, unknown>;
 
 type ActivityEntity = { id?: string } & Record<string, unknown>;
@@ -52,7 +86,7 @@ type CreateCardInput = {
 const isRecord = (val: unknown): val is Record<string, unknown> =>
   typeof val === 'object' && val !== null;
 
-const extractMessage = (err: unknown): string | undefined => {
+export const extractMessage = (err: unknown): string | undefined => {
   if (typeof err === 'string') return err;
   if (err instanceof Error) return err.message;
   if (isRecord(err) && isRecord(err.response) && isRecord(err.response.data)) {
@@ -86,6 +120,7 @@ interface BoardState {
   updateCard: (cardId: string, data: Partial<CardPayload> & Record<string, unknown>) => Promise<void>;
   deleteCard: (cardId: string) => Promise<void>;
   moveCard: (cardId: string, newListId: string, newPosition: number) => void;
+  moveList: (listId: string, newIndex: number) => void;
   updateCardPosition: (cardId: string, listId: string, position: number) => void;
   
   // Real-time updates
@@ -94,7 +129,7 @@ interface BoardState {
   handleListUpdated: (data: ListPayload) => void;
   handleListDeleted: (data: { id: string }) => void;
   handleCardCreated: (data: CardPayload) => void;
-  handleCardUpdated: (data: CardPayload) => void;
+  handleCardUpdated: (data: Partial<CardPayload> & Record<string, unknown>) => void;
   handleCardMoved: (data: { id: string; listId: string; position: number }) => void;
   handleCardDeleted: (data: { id: string }) => void;
   handleCommentCreated: (data: { cardId?: string; comment?: CommentEntity }) => void;
@@ -110,6 +145,37 @@ interface BoardState {
   handleTypingStopped: (data: { userId: string; boardId: string; cardId?: string }) => void;
   resetRealtimeState: () => void;
 }
+
+// Shared helper to remove a card locally, clean typing state, and reindex positions in its list
+const removeCardLocal = (state: BoardState, cardId: string, source?: string): Partial<BoardState> | BoardState => {
+  const cardToRemove = state.cards.find((c) => c.id === cardId);
+  if (!cardToRemove) {
+    console.debug('[BoardStore] delete no-op (card not found)', { source: source ?? 'unknown', cardId, totalCards: state.cards.length });
+    return state;
+  }
+
+  const listId = cardToRemove.listId;
+  const remaining = state.cards.filter((c) => c.id !== cardId);
+
+  // Clean typing state for this card
+  const typingByCard: Record<string, string[]> = { ...state.typingByCard };
+  if (typingByCard[cardId]) delete typingByCard[cardId];
+
+  // If we don't know the list, just apply the removal
+  if (!listId) {
+    return { cards: remaining, typingByCard } as Partial<BoardState>;
+  }
+
+  // Reindex positions within the affected list
+  const targetListCards = remaining
+    .filter((c) => c.listId === listId)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((c, index) => ({ ...c, position: index }));
+
+  const otherCards = remaining.filter((c) => c.listId !== listId);
+
+  return { cards: [...otherCards, ...targetListCards], typingByCard } as Partial<BoardState>;
+};
 
 export const useBoardStore = create<BoardState>((set, get) => ({
   board: null,
@@ -138,12 +204,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
 
     // Remove nested collections we keep separately in the store to satisfy types
-    const boardWithoutLists = { ...board } as BoardPayload;
-    delete (boardWithoutLists as any).lists;
+    const boardWithoutLists: BoardPayload = { ...board, lists: undefined };
 
     const listsWithoutCards = lists.map((l) => {
-      const { cards: _cards, ...rest } = (l as unknown) as Record<string, unknown>;
-      return rest as ListPayload;
+      const copy = { ...(l as Record<string, unknown>) };
+      delete (copy as Record<string, unknown>).cards;
+      return copy as ListPayload;
     });
 
     set({
@@ -192,8 +258,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const response = await api.post('/lists', { boardId, title });
       const newList = response.data;
       set((state) => {
-        const { cards: _ignore, ...rest } = (newList as unknown) as Record<string, unknown>;
-        const normalized: ListPayload = rest as ListPayload;
+        const restObj = { ...(newList as Record<string, unknown>) };
+        delete (restObj as Record<string, unknown>).cards;
+        const normalized: ListPayload = restObj as ListPayload;
+
         const hasPlaceholder = state.lists.some((l) => l.id === tempId);
         const newListId = isRecord(newList) && typeof newList.id === 'string' ? (newList.id as string) : undefined;
         const hasRealAlready = newListId ? state.lists.some((l) => l.id === newListId) : false;
@@ -239,8 +307,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     try {
       const response = await api.patch(`/lists/${listId}`, data);
       const updatedList = response.data as Partial<ListPayload> & Record<string, unknown>;
-      const { cards: _ignore, ...rest } = (updatedList as unknown) as Record<string, unknown>;
-      const sanitized = rest as Partial<ListPayload>;
+      const updatedCopy = { ...(updatedList as Record<string, unknown>) };
+      delete (updatedCopy as Record<string, unknown>).cards;
+      const sanitized = updatedCopy as Partial<ListPayload>;
       set((state) => {
         if (sanitized?.isArchived === true) {
           return {
@@ -286,6 +355,18 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       if (typeof data?.assigneeId === 'string') payload.assigneeId = data.assigneeId;
       if (typeof data?.color === 'string') payload.color = data.color;
 
+      // Derive typed optimistic fields from input (not from generic payload)
+      const optimisticTitle: string =
+        typeof data?.title === 'string' && data.title.trim() ? data.title.trim() : 'New Card';
+      const optimisticDescription: string =
+        typeof data?.description === 'string' && data.description.trim() ? data.description.trim() : '';
+      const optimisticPriority: string =
+        typeof data?.priority === 'string' ? data.priority : 'MEDIUM';
+      const optimisticDueDate: string | Date | null =
+        typeof data?.dueDate === 'string' ? data.dueDate : null;
+      const optimisticAssigneeId: string | null =
+        typeof data?.assigneeId === 'string' ? data.assigneeId : null;
+
       // Optimistic placeholder so UI updates instantly
       tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       set((state) => {
@@ -296,11 +377,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         const optimisticPosition = (maxPos || 0) + 1000;
         const optimistic: CardPayload = {
           id: tempId!,
-          title: payload.title || 'New Card',
-          description: payload.description || '',
-          priority: payload.priority || 'MEDIUM',
-          dueDate: payload.dueDate || null,
-          assigneeId: payload.assigneeId || null,
+          title: optimisticTitle,
+          description: optimisticDescription,
+          priority: optimisticPriority,
+          dueDate: optimisticDueDate,
+          assigneeId: optimisticAssigneeId,
           comments: [],
           _count: { comments: 0, attachments: 0 },
           createdAt: new Date().toISOString(),
@@ -381,22 +462,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const response = await api.patch(`/cards/${cardId}`, data);
       const updatedCard = response.data as Partial<CardPayload> & Record<string, unknown>;
       set((state) => ({
-        cards: state.cards.map((card) => {
-          if (card.id !== cardId) return card;
-          const nextIsCompleted =
-            typeof updatedCard?.isCompleted === 'boolean'
-              ? updatedCard.isCompleted
-              : (typeof updatedCard?.completed === 'boolean'
-                  ? (updatedCard.completed as boolean)
-                  : card.isCompleted);
-          return {
-            ...card,
-            ...(updatedCard as Partial<CardPayload>),
-            listId: (typeof updatedCard?.listId === 'string' ? updatedCard.listId : (isRecord(updatedCard?.list) && typeof (updatedCard.list as Record<string, unknown>).id === 'string' ? (updatedCard.list as Record<string, unknown>).id as string : card.listId)),
-            boardId: (typeof updatedCard?.boardId === 'string' ? updatedCard.boardId : (isRecord(updatedCard?.board) && typeof (updatedCard.board as Record<string, unknown>).id === 'string' ? (updatedCard.board as Record<string, unknown>).id as string : (card.boardId ?? state.board?.id))),
-            isCompleted: nextIsCompleted,
-          };
-        }),
+        cards: state.cards.map((card) =>
+          card.id === cardId ? { ...card, ...updatedCard } : card
+        ),
       }));
     } catch (error: unknown) {
       console.error('Failed to update card:', error);
@@ -450,12 +518,27 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
   },
 
+  moveList: (listId: string, newIndex: number) => {
+    set((state) => {
+      const currentIndex = state.lists.findIndex((l) => l.id === listId);
+      if (currentIndex === -1) return state;
+      const clampedIndex = Math.max(0, Math.min(newIndex, state.lists.length - 1));
+      if (currentIndex === clampedIndex) return state;
+
+      const next = state.lists.slice();
+      const [moved] = next.splice(currentIndex, 1);
+      next.splice(clampedIndex, 0, moved);
+
+      // Reindex positions to keep a consistent local order
+      const reindexed = next.map((l, idx) => ({ ...l, position: idx }));
+      return { lists: reindexed };
+    });
+  },
+
   deleteCard: async (cardId: string) => {
     try {
       await api.delete(`/cards/${cardId}`);
-      set((state) => ({
-        cards: state.cards.filter((card) => card.id !== cardId),
-      }));
+      set((state) => removeCardLocal(state, cardId, 'deleteCard'));
     } catch (error: unknown) {
       console.error('Failed to delete card:', error);
       throw error;
@@ -474,9 +557,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   handleBoardUpdate: (data: Partial<BoardPayload>) => {
     set((state) => {
       if (!state.board) return state;
-      const { lists: _ignore, ...rest } = (data as unknown) as Record<string, unknown>;
+      const copy = { ...(data as Record<string, unknown>) };
+      delete (copy as Record<string, unknown>).lists;
       return {
-        board: { ...(state.board as BoardPayload), ...(rest as Partial<BoardPayload>) },
+        board: { ...(state.board as BoardPayload), ...(copy as Partial<BoardPayload>) },
       };
     });
   },
@@ -486,8 +570,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const incomingId = data?.id;
       if (state.lists.some((l) => l.id === incomingId)) return state;
 
-      const { cards: _ignore, ...rest } = (data as unknown) as Record<string, unknown>;
-      const normalized: ListPayload = rest as ListPayload;
+      const copy = { ...(data as Record<string, unknown>) };
+      delete (copy as Record<string, unknown>).cards;
+      const normalized: ListPayload = copy as ListPayload;
 
       // If an optimistic placeholder exists with same title, replace it
       const placeholderIdx = state.lists.findIndex(
@@ -513,18 +598,88 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   handleListUpdated: (data: ListPayload) => {
     set((state) => {
-      const { cards: _ignore, ...rest } = (data as unknown) as Record<string, unknown>;
-      const sanitized = rest as Partial<ListPayload>;
-      if (sanitized?.isArchived === true) {
+      const copy = { ...(data as Record<string, unknown>) };
+      delete (copy as Record<string, unknown>).cards;
+      const sanitized = copy as Partial<ListPayload>;
+      const incomingId = data?.id;
+      if (!incomingId) return state;
+
+      const currentBoardId = state.board?.id;
+      const incomingBoardId = typeof sanitized?.boardId === 'string' ? sanitized.boardId : undefined;
+
+      // If the list was moved to a different board, remove it (and its cards) locally
+      if (incomingBoardId && currentBoardId && incomingBoardId !== currentBoardId) {
+        const existed = state.lists.some((l) => l.id === incomingId);
+        if (!existed) return state;
         return {
-          lists: state.lists.filter((list) => list.id !== data.id),
-          cards: state.cards.filter((card) => card.listId !== data.id),
+          lists: state.lists.filter((l) => l.id !== incomingId),
+          cards: state.cards.filter((c) => c.listId !== incomingId),
         };
       }
-      const next = state.lists.map((list) =>
-        list.id === data?.id ? { ...list, ...sanitized } : list
+
+      // Archiving removes the list and its cards
+      if (sanitized?.isArchived === true) {
+        return {
+          lists: state.lists.filter((list) => list.id !== incomingId),
+          cards: state.cards.filter((card) => card.listId !== incomingId),
+        };
+      }
+
+      // If we have an optimistic placeholder (created locally) that matches by title, replace it
+      const placeholderIdx = state.lists.findIndex(
+        (l) =>
+          typeof l.id === 'string' &&
+          l.id.startsWith('temp-list-') &&
+          (typeof sanitized?.title === 'string' ? l.title === sanitized.title : false)
       );
-      next.sort((a, b) => (a?.position ?? 0) - (b?.position ?? 0));
+      if (placeholderIdx !== -1) {
+        const nextFromPlaceholder = state.lists.slice();
+        nextFromPlaceholder[placeholderIdx] = {
+          ...nextFromPlaceholder[placeholderIdx],
+          ...(sanitized as Partial<ListPayload>),
+          id: incomingId,
+        } as ListPayload;
+        nextFromPlaceholder.sort((a, b) => (a?.position ?? 0) - (b?.position ?? 0));
+        return { lists: nextFromPlaceholder };
+      }
+
+      // Update existing list or add it if it's missing (in case we missed a create event)
+      const existsIdx = state.lists.findIndex((l) => l.id === incomingId);
+      if (existsIdx === -1) {
+        // Only add if it belongs to this board (or board is unknown)
+        if (incomingBoardId && currentBoardId && incomingBoardId !== currentBoardId) return state;
+        const toAdd = ({ id: incomingId, ...(sanitized as Partial<ListPayload>) } as unknown) as ListPayload;
+        const appended = [...state.lists, toAdd].sort(
+          (a, b) => (a?.position ?? 0) - (b?.position ?? 0)
+        );
+        return { lists: appended };
+      }
+
+      // If an explicit position is provided, interpret it as target index and reorder locally.
+      // This ensures remote clients maintain a consistent ordering even if the server
+      // only updates a single list's numeric position.
+      if (typeof sanitized?.position === 'number') {
+        const pos = sanitized.position as number;
+        const isInt = Number.isInteger(pos);
+        const withinRange = isInt && pos >= 0 && pos < state.lists.length;
+        if (withinRange) {
+          const currentIndex = existsIdx;
+          const targetIndex = pos;
+          if (currentIndex !== targetIndex) {
+            const nextOrder = state.lists.slice();
+            const [moved] = nextOrder.splice(currentIndex, 1);
+            nextOrder.splice(targetIndex, 0, { ...moved, ...(sanitized as Partial<ListPayload>) } as ListPayload);
+            // Reindex positions to keep local order consistent
+            const reindexed = nextOrder.map((l, idx) => ({ ...l, position: idx }));
+            return { lists: reindexed };
+          }
+        }
+      }
+
+      const next = state.lists.map((list) =>
+        list.id === incomingId ? { ...list, ...sanitized } : list
+      );
+      // Do not resort here; keep existing local order to avoid unintended jumps
       return { lists: next };
     });
   },
@@ -572,39 +727,73 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
   },
 
-  handleCardUpdated: (data: CardPayload) => {
-    set((state) => ({
-      cards: state.cards.map((card) =>
-        card.id === data.id
-          ? {
-              ...card,
-              ...(data as Partial<CardPayload> & Record<string, unknown>),
-              listId: data?.listId ?? data?.list?.id ?? card.listId,
-              boardId: data?.boardId ?? data?.board?.id ?? card.boardId ?? state.board?.id,
-              isCompleted:
-                typeof data?.isCompleted === 'boolean'
-                  ? data.isCompleted
-                  : (typeof data?.completed === 'boolean' ? (data.completed as boolean) : card.isCompleted),
-            }
-          : card
-      ),
-    }));
+  handleCardUpdated: (data: Partial<CardPayload> & Record<string, unknown>) => {
+    set((state) => {
+      const next = state.cards.map((card) => {
+        if (card.id !== data.id) return card;
+
+        const merged = {
+          ...card,
+          ...(data as Partial<CardPayload> & Record<string, unknown>),
+          listId: data?.listId ?? data?.list?.id ?? card.listId,
+          boardId: data?.boardId ?? data?.board?.id ?? card.boardId ?? state.board?.id,
+          isCompleted:
+            typeof data?.isCompleted === 'boolean'
+              ? data.isCompleted
+              : (typeof data?.completed === 'boolean' ? (data.completed as boolean) : card.isCompleted),
+        } as Record<string, unknown>;
+
+        // Explicitly handle attachments array if present on the payload
+        const incomingAttachments = (data as Record<string, unknown>)?.attachments;
+        if (Array.isArray(incomingAttachments)) {
+          (merged as Record<string, unknown>).attachments = incomingAttachments;
+
+          const incomingCount =
+            isRecord((data as Record<string, unknown>)?._count) &&
+            typeof ((data as { _count?: { attachments?: unknown } })?._count?.attachments) === 'number'
+              ? ((data as { _count?: { attachments?: number } })._count!.attachments as number)
+              : undefined;
+
+          const prevCount =
+            isRecord((card as Record<string, unknown>)?._count) &&
+            typeof ((card as { _count?: { attachments?: unknown } })?._count?.attachments) === 'number'
+              ? ((card as { _count?: { attachments?: number } })._count!.attachments as number)
+              : undefined;
+
+          const nextCount = typeof incomingCount === 'number' ? incomingCount : incomingAttachments.length;
+          const existingCountObj = isRecord((merged as Record<string, unknown>)?._count)
+            ? ((merged as { _count?: Record<string, unknown> })._count as Record<string, unknown>)
+            : (isRecord((card as Record<string, unknown>)?._count)
+                ? ((card as { _count?: Record<string, unknown> })._count as Record<string, unknown>)
+                : {});
+
+          (merged as { _count?: Record<string, unknown> })._count = {
+            ...existingCountObj,
+            attachments: typeof nextCount === 'number' ? nextCount : (prevCount ?? 0),
+          } as Record<string, unknown>;
+        }
+
+        return merged as CardPayload;
+      });
+      return { cards: next };
+    });
   },
 
   handleCardMoved: (data: { id: string; listId: string; position: number }) => {
-    set((state) => ({
-      cards: state.cards.map((card) =>
-        card.id === data.id
-          ? { ...card, listId: data.listId, position: data.position }
-          : card
-      ),
-    }));
+    // Read defensively without using 'any'
+    const rec = (data as unknown) as Record<string, unknown>;
+    const idVal = typeof rec.id === 'string' ? (rec.id as string) : undefined;
+    const listIdVal = typeof rec.listId === 'string' ? (rec.listId as string) : undefined;
+    const posVal = typeof rec.position === 'number' ? (rec.position as number) : undefined;
+    if (!idVal || !listIdVal || typeof posVal !== 'number') return;
+    // Reuse local move logic to reindex both source and target lists consistently on remote events
+    get().moveCard(idVal, listIdVal, posVal);
   },
 
   handleCardDeleted: (data: { id: string }) => {
-    set((state) => ({
-      cards: state.cards.filter((card) => card.id !== data.id),
-    }));
+    const deletedId = data?.id;
+    if (!deletedId) return;
+    set((state) => removeCardLocal(state, deletedId, 'handleCardDeleted'));
   },
 
   // Comment events
