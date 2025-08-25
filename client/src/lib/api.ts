@@ -5,7 +5,7 @@ import axios from 'axios'
 // - On the server (SSR/Node): use absolute backend URL from env (or localhost fallback)
 const envApi = process.env.NEXT_PUBLIC_API_URL
 const baseURL = typeof window !== 'undefined'
-  ? '/api/v1'
+  ? (envApi || '/api/v1')
   : (envApi || 'http://localhost:3001/api/v1')
 
 export const api = axios.create({

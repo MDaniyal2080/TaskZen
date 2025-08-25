@@ -152,11 +152,14 @@ async function purgeData(adminId) {
     await prisma.user.deleteMany({ where: { id: { not: adminId } } });
 }
 async function main() {
-    const adminEmail = 'admin@gmail.com';
-    const adminPassword = 'admin@gmail.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@gmail.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin@gmail.com';
+    const purge = String(process.env.SEED_PURGE || '').toLowerCase() === 'true';
     const admin = await ensureAdmin(adminEmail, adminPassword);
-    await purgeData(admin.id);
-    console.log(`Seeding complete. Admin user: ${admin.email}`);
+    if (purge) {
+        await purgeData(admin.id);
+    }
+    console.log(`Seeding complete. Admin user: ${admin.email}${purge ? ' (purge applied)' : ''}`);
 }
 main()
     .then(async () => {

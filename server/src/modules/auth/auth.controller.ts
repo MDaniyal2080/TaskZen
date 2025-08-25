@@ -43,10 +43,11 @@ export class AuthController {
   @Get('csrf')
   async getCsrf(@Res({ passthrough: true }) res: Response) {
     const token = CsrfGuard.generateToken();
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('csrf-token', token, {
       httpOnly: false,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: isProd ? 'none' : 'lax',
+      secure: isProd,
     });
     return { csrfToken: token };
   }
