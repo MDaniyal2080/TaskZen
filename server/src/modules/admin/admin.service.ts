@@ -295,62 +295,48 @@ export class AdminService {
         startDate.setDate(now.getDate() - 30);
     }
 
-    // Fetch all metrics in parallel including comprehensive task metrics
-    const [
-      totalUsers,
-      activeUsers,
-      totalBoards,
-      proUsers,
-      userGrowth,
-      boardGrowth,
-      recentUsers,
-      mostActiveBoards,
-      taskMetrics, // New comprehensive task metrics
-    ] = await Promise.all([
-      this.prisma.user.count(),
-      this.prisma.user.count({ where: { isActive: true } }),
-      this.prisma.board.count(),
-      this.prisma.user.count({ where: { isPro: true } }),
-      
-      // User growth calculation
-      this.prisma.user.count({
-        where: { createdAt: { gte: startDate } },
-      }),
-      
-      // Board growth calculation
-      this.prisma.board.count({
-        where: { createdAt: { gte: startDate } },
-      }),
-      
-      // Recent user activity
-      this.prisma.user.findMany({
-        where: { createdAt: { gte: startDate } },
-        select: { createdAt: true },
-        orderBy: { createdAt: 'asc' },
-      }),
-      
-      // Most active boards
-      this.prisma.board.findMany({
-        take: 10,
-        select: {
-          id: true,
-          title: true,
-          _count: {
-            select: {
-              lists: true,
-            },
+    // Fetch metrics sequentially to avoid exhausting DB connection pool in low-connection environments
+    const totalUsers = await this.prisma.user.count();
+    const activeUsers = await this.prisma.user.count({ where: { isActive: true } });
+    const totalBoards = await this.prisma.board.count();
+    const proUsers = await this.prisma.user.count({ where: { isPro: true } });
+    
+    // Growth calculations
+    const userGrowth = await this.prisma.user.count({
+      where: { createdAt: { gte: startDate } },
+    });
+    const boardGrowth = await this.prisma.board.count({
+      where: { createdAt: { gte: startDate } },
+    });
+    
+    // Recent user activity
+    const recentUsers = await this.prisma.user.findMany({
+      where: { createdAt: { gte: startDate } },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    
+    // Most active boards
+    const mostActiveBoards = await this.prisma.board.findMany({
+      take: 10,
+      select: {
+        id: true,
+        title: true,
+        _count: {
+          select: {
+            lists: true,
           },
         },
-        orderBy: {
-          lists: {
-            _count: 'desc',
-          },
+      },
+      orderBy: {
+        lists: {
+          _count: 'desc',
         },
-      }),
-      
-      // Get comprehensive task metrics
-      this.getTaskMetrics(startDate),
-    ]);
+      },
+    });
+    
+    // Get comprehensive task metrics
+    const taskMetrics = await this.getTaskMetrics(startDate);
     
     // Compute averages across all boards (real, not placeholder)
     const allBoardsCounts = await this.prisma.board.findMany({
@@ -374,25 +360,28 @@ export class AdminService {
     // Task growth: compare current period vs previous equal-length period
     const periodMs = now.getTime() - startDate.getTime();
     const prevStartDate = new Date(startDate.getTime() - periodMs);
-    const [tasksCreatedCurrent, tasksCreatedPrev] = await Promise.all([
-      this.prisma.card.count({ where: { createdAt: { gte: startDate } } }),
-      this.prisma.card.count({ where: { createdAt: { gte: prevStartDate, lt: startDate } } }),
-    ]);
+    const tasksCreatedCurrent = await this.prisma.card.count({ where: { createdAt: { gte: startDate } } });
+    const tasksCreatedPrev = await this.prisma.card.count({ where: { createdAt: { gte: prevStartDate, lt: startDate } } });
     const taskGrowthPercent = tasksCreatedPrev > 0
       ? ((tasksCreatedCurrent - tasksCreatedPrev) / tasksCreatedPrev) * 100
       : 0;
 
     // Revenue growth: compare succeeded transaction sums for current vs previous period
-    const [txCurrent, txPrev] = await Promise.all([
-      this.prisma.transaction.aggregate({
+    let txCurrent: any;
+    let txPrev: any;
+    try {
+      txCurrent = await this.prisma.transaction.aggregate({
         where: { status: TransactionStatus.SUCCEEDED, createdAt: { gte: startDate } },
         _sum: { amount: true },
-      }),
-      this.prisma.transaction.aggregate({
+      });
+      txPrev = await this.prisma.transaction.aggregate({
         where: { status: TransactionStatus.SUCCEEDED, createdAt: { gte: prevStartDate, lt: startDate } },
         _sum: { amount: true },
-      }),
-    ]).catch(() => [{ _sum: { amount: 0 } }, { _sum: { amount: 0 } }] as any);
+      });
+    } catch {
+      txCurrent = { _sum: { amount: 0 } } as any;
+      txPrev = { _sum: { amount: 0 } } as any;
+    }
     const txCurrAmt = Number(txCurrent._sum.amount ?? 0);
     const txPrevAmt = Number(txPrev._sum.amount ?? 0);
     const revenueGrowthPercent = txPrevAmt > 0 ? ((txCurrAmt - txPrevAmt) / txPrevAmt) * 100 : 0;
@@ -531,116 +520,98 @@ export class AdminService {
     const monthAgo = new Date(today);
     monthAgo.setMonth(monthAgo.getMonth() - 1);
 
-    const [
-      totalTasks,
-      completedTasks,
-      completedToday,
-      completedThisWeek,
-      completedThisMonth,
-      createdToday,
-      createdThisWeek,
-      overdueTasks,
-      tasksByStatus,
-      tasksByPriority,
-      avgTasksPerUser,
-      avgTasksPerBoard,
-    ] = await Promise.all([
-      // Total tasks
-      this.prisma.card.count(),
-      
-      // Completed tasks (all time)
-      this.prisma.card.count({ where: { isCompleted: true } }),
-      
-      // Completed today
-      this.prisma.card.count({
-        where: {
-          isCompleted: true,
-          updatedAt: { gte: today }
+    // Execute sequentially to minimize concurrent connections
+    const totalTasks = await this.prisma.card.count();
+    
+    // Completed tasks (all time)
+    const completedTasks = await this.prisma.card.count({ where: { isCompleted: true } });
+    
+    // Completed today
+    const completedToday = await this.prisma.card.count({
+      where: {
+        isCompleted: true,
+        updatedAt: { gte: today }
+      }
+    });
+    
+    // Completed this week
+    const completedThisWeek = await this.prisma.card.count({
+      where: {
+        isCompleted: true,
+        updatedAt: { gte: weekAgo }
+      }
+    });
+    
+    // Completed this month
+    const completedThisMonth = await this.prisma.card.count({
+      where: {
+        isCompleted: true,
+        updatedAt: { gte: monthAgo }
+      }
+    });
+    
+    // Created today
+    const createdToday = await this.prisma.card.count({
+      where: { createdAt: { gte: today } }
+    });
+    
+    // Created this week
+    const createdThisWeek = await this.prisma.card.count({
+      where: { createdAt: { gte: weekAgo } }
+    });
+    
+    // Overdue tasks (using dueDate field)
+    const overdueTasks = await this.prisma.card.count({
+      where: {
+        isCompleted: false,
+        dueDate: { lt: now }
+      }
+    });
+    
+    // Tasks by completion status
+    const incompleteCount = await this.prisma.card.count({ where: { isCompleted: false } });
+    
+    // Tasks by priority
+    const tasksByPriority = await this.prisma.card.groupBy({
+      by: ['priority'],
+      _count: { _all: true }
+    });
+    
+    // Average tasks per user
+    const avgTasksPerUser = await this.prisma.user.findMany({
+      select: {
+        _count: {
+          select: { cards: true }
         }
-      }),
-      
-      // Completed this week
-      this.prisma.card.count({
-        where: {
-          isCompleted: true,
-          updatedAt: { gte: weekAgo }
-        }
-      }),
-      
-      // Completed this month
-      this.prisma.card.count({
-        where: {
-          isCompleted: true,
-          updatedAt: { gte: monthAgo }
-        }
-      }),
-      
-      // Created today
-      this.prisma.card.count({
-        where: { createdAt: { gte: today } }
-      }),
-      
-      // Created this week
-      this.prisma.card.count({
-        where: { createdAt: { gte: weekAgo } }
-      }),
-      
-      // Overdue tasks (using dueDate field)
-      this.prisma.card.count({
-        where: {
-          isCompleted: false,
-          dueDate: { lt: now }
-        }
-      }),
-      
-      // Tasks by completion status
-      Promise.all([
-        this.prisma.card.count({ where: { isCompleted: false } }),
-        this.prisma.card.count({ where: { isCompleted: true } }),
-      ]),
-      
-      // Tasks by priority
-      this.prisma.card.groupBy({
-        by: ['priority'],
-        _count: { _all: true }
-      }),
-      
-      // Average tasks per user
-      this.prisma.user.findMany({
-        select: {
-          _count: {
-            select: { cards: true }
-          }
-        }
-      }).then(users => {
-        const total = users.reduce((sum, u) => sum + u._count.cards, 0);
-        return users.length > 0 ? total / users.length : 0;
-      }),
-      
-      // Average tasks per board
-      this.prisma.board.findMany({
-        select: {
-          _count: {
-            select: { lists: true }
-          },
-          lists: {
-            select: {
-              _count: {
-                select: { cards: true }
-              }
+      }
+    }).then(users => {
+      const total = users.reduce((sum, u) => sum + u._count.cards, 0);
+      return users.length > 0 ? total / users.length : 0;
+    });
+    
+    // Average tasks per board
+    const avgTasksPerBoard = await this.prisma.board.findMany({
+      select: {
+        _count: {
+          select: { lists: true }
+        },
+        lists: {
+          select: {
+            _count: {
+              select: { cards: true }
             }
           }
         }
-      }).then(boards => {
-        let totalCards = 0;
-        boards.forEach(board => {
-          board.lists.forEach(list => {
-            totalCards += list._count.cards;
-          });
+      }
+    }).then(boards => {
+      let totalCards = 0;
+      boards.forEach(board => {
+        board.lists.forEach(list => {
+          totalCards += list._count.cards;
         });
-        return boards.length > 0 ? totalCards / boards.length : 0;
-      }),
-    ]);
+      });
+      return boards.length > 0 ? totalCards / boards.length : 0;
+    });
 
     // Calculate metrics
     const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
@@ -655,7 +626,7 @@ export class AdminService {
       overview: {
         total: totalTasks,
         completed: completedTasks,
-        inProgress: tasksByStatus[0],
+        inProgress: incompleteCount,
         overdue: overdueTasks,
         completionRate: Math.round(completionRate * 10) / 10,
         avgPerUser: Math.round(avgTasksPerUser * 10) / 10,
@@ -682,8 +653,8 @@ export class AdminService {
         }))
         .sort((a, b) => b.count - a.count),
       byStatus: [
-        { status: 'To Do', count: tasksByStatus[0], color: 'text-yellow-600' },
-        { status: 'Completed', count: tasksByStatus[1], color: 'text-green-600' },
+        { status: 'To Do', count: incompleteCount, color: 'text-yellow-600' },
+        { status: 'Completed', count: completedTasks, color: 'text-green-600' },
       ],
     };
   }
