@@ -602,8 +602,7 @@ export class AdminService {
       // Tasks by priority
       this.prisma.card.groupBy({
         by: ['priority'],
-        _count: { _all: true },
-        orderBy: { _count: { _all: 'desc' } }
+        _count: { _all: true }
       }),
       
       // Average tasks per user
@@ -676,10 +675,12 @@ export class AdminService {
         completed: completedThisMonth,
         velocity: Math.round(taskVelocity * 10) / 10,
       },
-      byPriority: tasksByPriority.map(item => ({
-        priority: item.priority || 'None',
-        count: (item as any)._count?._all ?? 0,
-      })),
+      byPriority: tasksByPriority
+        .map(item => ({
+          priority: item.priority || 'None',
+          count: (item as any)._count?._all ?? 0,
+        }))
+        .sort((a, b) => b.count - a.count),
       byStatus: [
         { status: 'To Do', count: tasksByStatus[0], color: 'text-yellow-600' },
         { status: 'Completed', count: tasksByStatus[1], color: 'text-green-600' },
