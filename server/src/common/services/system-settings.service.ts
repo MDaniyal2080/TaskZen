@@ -85,6 +85,7 @@ export class SystemSettingsService {
     fetchedAt: 0,
   };
   private readonly TTL_MS = 5000;
+  private inFlight: Promise<SystemSettingsShape> | null = null;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -98,20 +99,29 @@ export class SystemSettingsService {
       return this.cache.settings;
     }
 
-    try {
-      const timeoutMs = Number(process.env.SETTINGS_FETCH_TIMEOUT_MS || 1000);
-      const row: DBSystemSettings | null = await Promise.race([
-        this.prisma.systemSettings.findUnique({ where: { id: "default" } }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(`SystemSettings fetch timeout after ${timeoutMs}ms`),
-              ),
-            timeoutMs,
+    if (!forceRefresh && this.inFlight) {
+      return this.inFlight;
+    }
+
+    this.inFlight = (async (): Promise<SystemSettingsShape> => {
+      try {
+        const raw = Number(process.env.SETTINGS_FETCH_TIMEOUT_MS || 1000);
+        const timeoutMs = Math.min(
+          Math.max(Number.isFinite(raw) ? raw : 1000, 1000),
+          15000,
+        );
+        const row: DBSystemSettings | null = await Promise.race([
+          this.prisma.systemSettings.findUnique({ where: { id: "default" } }),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () =>
+                reject(
+                  new Error(`SystemSettings fetch timeout after ${timeoutMs}ms`),
+                ),
+              timeoutMs,
+            ),
           ),
-        ),
-      ]);
+        ]);
 
       const defaultGeneral: GeneralSettings = {
         siteName: "TaskZen",
@@ -226,13 +236,20 @@ export class SystemSettingsService {
         email: mergedEmail,
         payments: mergedPayments,
       };
-
-      this.cache = { settings: merged, fetchedAt: now };
+      this.cache = { settings: merged, fetchedAt: Date.now() };
       return merged;
     } catch (err) {
       this.logger.warn(
-        `Failed to load system settings, using safe defaults. Error: ${err}`,
+        `Failed to load system settings, using safe defaults or stale cache. Error: ${err}`,
       );
+      // Prefer stale cached settings (even if TTL expired) over hardcoded defaults
+      if (this.cache.settings) {
+        this.logger.warn(
+          `Returning stale system settings from cache due to fetch failure`,
+        );
+        this.cache = { settings: this.cache.settings, fetchedAt: Date.now() };
+        return this.cache.settings;
+      }
       const fallback: SystemSettingsShape = {
         general: {
           siteName: "TaskZen",
@@ -293,8 +310,12 @@ export class SystemSettingsService {
         },
       };
       // Cache fallback to avoid repeated slow attempts for TTL duration
-      this.cache = { settings: fallback, fetchedAt: now };
+      this.cache = { settings: fallback, fetchedAt: Date.now() };
       return fallback;
+    } finally {
+      this.inFlight = null;
     }
+    })();
+    return this.inFlight;
   }
 }
