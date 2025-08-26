@@ -68,16 +68,23 @@ export class PrismaService
       `Attempting to connect to database (timeout=${timeoutMs}ms)...`,
     );
     try {
+      let t: NodeJS.Timeout | undefined;
       await Promise.race([
         this.$connect(),
-        new Promise((_, reject) =>
-          setTimeout(
-            () =>
-              reject(new Error(`Prisma $connect timeout after ${timeoutMs}ms`)),
+        new Promise((_, reject) => {
+          t = setTimeout(
+            () => reject(new Error(`Prisma $connect timeout after ${timeoutMs}ms`)),
             timeoutMs,
-          ),
-        ),
-      ]);
+          );
+          // Do not keep the event loop alive just for this timer
+          (t as any).unref?.();
+        }),
+      ]).finally(() => {
+        if (t) {
+          clearTimeout(t);
+          t = undefined;
+        }
+      });
       this.logger.log("Database connection established");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

@@ -26,6 +26,17 @@ export class AdminService {
     return Math.min(60000, Math.max(5000, Number.isFinite(n) ? n : 20000));
   }
 
+  // Small TTL caches to protect hot endpoints (revenue transactions, recent activities)
+  private txCache = new Map<string, { value: any; expiresAt: number }>();
+  private txInflight = new Map<string, Promise<any>>();
+  private activitiesCache = new Map<string, { value: any; expiresAt: number }>();
+  private activitiesInflight = new Map<string, Promise<any>>();
+  private get smallCacheTtlMs() {
+    const n = Number(process.env.ADMIN_SMALL_CACHE_TTL_MS || 3000);
+    // clamp 1s - 10s
+    return Math.min(10000, Math.max(1000, Number.isFinite(n) ? n : 3000));
+  }
+
   // Access control for admin-only operations
   private checkAdminRole(role: UserRole) {
     if (role !== "ADMIN") {
@@ -994,32 +1005,61 @@ export class AdminService {
       ];
     }
 
-    // Run sequentially to avoid parallel queries in constrained environments
-    const total = await this.prisma.transaction.count({ where });
-    const records = await this.prisma.transaction.findMany({
-      where,
-      take: limit,
-      skip: offset,
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: { select: { id: true, email: true, username: true } },
-      },
-    });
+    // Request-level cache + in-flight dedupe to reduce DB pressure under bursty traffic
+    const cacheKey = `tx:${JSON.stringify({ limit, offset, status: statusFilter ?? null, plan: plan ?? null, q: (q || "").trim().toLowerCase() })}`;
+    const now = Date.now();
+    const cached = this.txCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
 
-    return {
-      total,
-      transactions: records.map((t) => ({
-        id: t.id,
-        userId: t.userId,
-        email: t.user?.email ?? "",
-        username: t.user?.username ?? "",
-        plan: t.plan,
-        amount: Number(String(t.amount ?? "0")),
-        currency: t.currency,
-        status: String(t.status).toLowerCase(),
-        createdAt: t.createdAt.toISOString(),
-      })),
-    };
+    const existing = this.txInflight.get(cacheKey);
+    if (existing) {
+      return existing;
+    }
+
+    const promise = (async () => {
+      const [total, records] = await this.prisma.$transaction([
+        this.prisma.transaction.count({ where }),
+        this.prisma.transaction.findMany({
+          where,
+          take: limit,
+          skip: offset,
+          orderBy: { createdAt: "desc" },
+          include: {
+            user: { select: { id: true, email: true, username: true } },
+          },
+        }),
+      ]);
+
+      const result = {
+        total,
+        transactions: records.map((t) => ({
+          id: t.id,
+          userId: t.userId,
+          email: t.user?.email ?? "",
+          username: t.user?.username ?? "",
+          plan: t.plan,
+          amount: Number(String(t.amount ?? "0")),
+          currency: t.currency,
+          status: String(t.status).toLowerCase(),
+          createdAt: t.createdAt.toISOString(),
+        })),
+      };
+
+      this.txCache.set(cacheKey, {
+        value: result,
+        expiresAt: Date.now() + this.smallCacheTtlMs,
+      });
+      return result;
+    })();
+
+    this.txInflight.set(cacheKey, promise);
+    try {
+      return await promise;
+    } finally {
+      this.txInflight.delete(cacheKey);
+    }
   }
 
   async exportRevenueTransactionsCsv(
@@ -1134,18 +1174,40 @@ export class AdminService {
 
   async getRecentActivities(userRole: UserRole, limit: number = 10) {
     this.checkAdminRole(userRole);
-    return this.prisma.activity.findMany({
-      take: limit,
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: {
-          select: { id: true, username: true, email: true, avatar: true },
+    const key = `activities:${limit}`;
+    const now = Date.now();
+    const cached = this.activitiesCache.get(key);
+    if (cached && cached.expiresAt > now) return cached.value;
+
+    const inflight = this.activitiesInflight.get(key);
+    if (inflight) return inflight;
+
+    const p = (async () => {
+      const rows = await this.prisma.activity.findMany({
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: {
+            select: { id: true, username: true, email: true, avatar: true },
+          },
+          board: {
+            select: { id: true, title: true },
+          },
         },
-        board: {
-          select: { id: true, title: true },
-        },
-      },
-    });
+      });
+      this.activitiesCache.set(key, {
+        value: rows,
+        expiresAt: Date.now() + this.smallCacheTtlMs,
+      });
+      return rows;
+    })();
+
+    this.activitiesInflight.set(key, p);
+    try {
+      return await p;
+    } finally {
+      this.activitiesInflight.delete(key);
+    }
   }
 
   // Administrative dashboard overview
