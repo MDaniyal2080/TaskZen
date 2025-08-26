@@ -10,7 +10,6 @@ import * as PDFDocument from "pdfkit";
 import type { Prisma } from "@prisma/client";
 import type { SystemSettingsShape } from "../../common/services/system-settings.service";
 
-type TxAgg = { _sum: { amount: number | null } };
 
 @Injectable()
 export class AdminService {
@@ -96,36 +95,52 @@ export class AdminService {
     months: number,
     now: Date = new Date(),
   ) {
-    // Build windows then query in parallel for lower end-to-end latency
-    const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+    // Compute a single time window [start, end) covering the last `months` months
+    const start = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1),
+    );
+    const end = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
+    );
+
+    // Pre-compute labels and YYYY-MM keys for each month to fill zeros
     const windows = Array.from({ length: months }, (_, i) => {
-      const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
-      const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
-      const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      const label = monthStart.toLocaleString("default", {
+      const d = new Date(
+        Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1),
+      );
+      const label = d.toLocaleString("default", {
         month: "short",
         year: "numeric",
       });
-      return { monthStart, monthEnd, label };
+      const ym = this.getMonthLabel(d); // YYYY-MM
+      return { ym, label };
     });
 
-    const results = await Promise.all(
-      windows.map(({ monthStart, monthEnd }) =>
-        this.prisma.transaction
-          .aggregate({
-            where: {
-              status: TransactionStatus.SUCCEEDED,
-              createdAt: { gte: monthStart, lt: monthEnd },
-            },
-            _sum: { amount: true },
-          })
-          .catch(() => ({ _sum: { amount: 0 } }) as TxAgg),
-      ),
+    let rows: { ym: string; sum: number | null }[] = [];
+    try {
+      rows = await this.prisma.$queryRaw<
+        { ym: string; sum: number | null }[]
+      >`
+        SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS ym,
+               SUM("amount")::float8 AS sum
+        FROM "transactions"
+        WHERE "status" = 'SUCCEEDED'
+          AND "createdAt" >= ${start}
+          AND "createdAt" < ${end}
+        GROUP BY 1
+        ORDER BY 1
+      `;
+    } catch {
+      rows = [];
+    }
+
+    const map = new Map<string, number>(
+      rows.map((r) => [r.ym, Number(r.sum ?? 0)]),
     );
 
-    return results.map((agg, idx) => ({
-      month: windows[idx].label,
-      amount: Number(agg._sum.amount ?? 0),
+    return windows.map((w) => ({
+      month: w.label,
+      amount: Number(map.get(w.ym) ?? 0),
     }));
   }
 
@@ -160,10 +175,7 @@ export class AdminService {
     const growthPct = (curr: number, prev: number) =>
       prev > 0 ? ((curr - prev) / prev) * 100 : curr > 0 ? 100 : 0;
 
-    // Pre-start monthly revenue calculation to overlap with other queries
-    const revenueMonthlyPromise = this.calculateMonthlyRevenueSeries(12);
-
-    // Batch A: overview counts, overdue, settings, userActivity source, completed cards for avg completion
+    // Batch A: overview counts, overdue, userActivity source, and avg completion time
     const [
       totalUsers,
       activeUsers,
@@ -172,9 +184,9 @@ export class AdminService {
       totalTasks,
       completedTasks,
       overdue,
-      settings,
       userCreationsInRange,
-    ] = await Promise.all([
+      avgCompletionRows,
+    ] = await this.prisma.$transaction([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { isActive: true } }),
       this.prisma.user.count({ where: { isPro: true } }),
@@ -184,12 +196,23 @@ export class AdminService {
       this.prisma.card.count({
         where: { dueDate: { lt: new Date() }, isCompleted: false },
       }),
-      this.systemSettings.getSettings(),
       this.prisma.user.findMany({
         where: { createdAt: { gte: startCurr, lte: now } },
         select: { createdAt: true },
       }),
+      this.prisma.$queryRaw<{ avg_days: number | null }[]>`
+        SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt" - "createdAt")) / 86400) AS avg_days
+        FROM "cards"
+        WHERE "isCompleted" = true
+          AND "updatedAt" IS NOT NULL
+          AND "createdAt" >= ${startCurr}
+          AND "createdAt" <= ${now}
+      `,
     ]);
+
+    // Settings fetched separately to avoid non-Prisma call inside transaction
+    const settings: SystemSettingsShape =
+      await this.systemSettings.getSettings();
 
     const completionRate =
       totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
@@ -212,7 +235,7 @@ export class AdminService {
       revCurrAgg,
       boards,
       proUsers,
-    ] = await Promise.all([
+    ] = await this.prisma.$transaction([
       this.prisma.user.count({
         where: { createdAt: { gte: startPrev, lt: endPrev } },
       }),
@@ -300,21 +323,11 @@ export class AdminService {
       .sort((a, b) => (a[0] < b[0] ? -1 : 1))
       .map(([month, count]) => ({ month, count }));
 
-    // Avg completion time (days), computed in DB to reduce memory and latency
-    let avgCompletionTimeDays = 0;
-    try {
-      const rows = await this.prisma.$queryRaw<{ avg_days: number | null }[]>`
-        SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt" - "createdAt")) / 86400) AS avg_days
-        FROM "cards"
-        WHERE "isCompleted" = true
-          AND "updatedAt" IS NOT NULL
-          AND "createdAt" >= ${startCurr}
-          AND "createdAt" <= ${now}
-      `;
-      avgCompletionTimeDays = Number(rows?.[0]?.avg_days ?? 0);
-    } catch {
-      avgCompletionTimeDays = 0;
-    }
+    // Avg completion time (days) from batch A raw query
+    const avgCompletionTimeDays = Number(avgCompletionRows?.[0]?.avg_days ?? 0);
+
+    // Monthly revenue series (single grouped query)
+    const revenueMonthly = await this.calculateMonthlyRevenueSeries(12, now);
 
     const result = {
       overview: {
@@ -329,7 +342,7 @@ export class AdminService {
       revenue: {
         mrr,
         arr,
-        monthly: await revenueMonthlyPromise,
+        monthly: revenueMonthly,
         byPlan: [
           {
             plan: "Pro",
@@ -1138,44 +1151,52 @@ export class AdminService {
   // Administrative dashboard overview
   async getDashboardStats(userRole: UserRole) {
     this.checkAdminRole(userRole);
-    const totalUsers = await this.prisma.user.count();
-    const activeUsers = await this.prisma.user.count({
-      where: { isActive: true },
-    });
-    const proUsers = await this.prisma.user.count({ where: { isPro: true } });
-    const totalBoards = await this.prisma.board.count();
-    const archivedBoards = await this.prisma.board.count({
-      where: { isArchived: true },
-    });
-    const totalTasks = await this.prisma.card.count();
-    const completedTasks = await this.prisma.card.count({
-      where: { isCompleted: true },
-    });
-    const overdueTasks = await this.prisma.card.count({
-      where: { dueDate: { lt: new Date() }, isCompleted: false },
-    });
+    const [
+      totalUsers,
+      activeUsers,
+      proUsers,
+      totalBoards,
+      archivedBoards,
+      totalTasks,
+      completedTasks,
+      overdueTasks,
+      recentUsers,
+      recentBoards,
+    ] = await this.prisma.$transaction([
+      this.prisma.user.count(),
+      this.prisma.user.count({ where: { isActive: true } }),
+      this.prisma.user.count({ where: { isPro: true } }),
+      this.prisma.board.count(),
+      this.prisma.board.count({ where: { isArchived: true } }),
+      this.prisma.card.count(),
+      this.prisma.card.count({ where: { isCompleted: true } }),
+      this.prisma.card.count({
+        where: { dueDate: { lt: new Date() }, isCompleted: false },
+      }),
+      this.prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          email: true,
+          username: true,
+          createdAt: true,
+          isActive: true,
+          isPro: true,
+        },
+      }),
+      this.prisma.board.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { id: true, title: true, createdAt: true, isArchived: true },
+      }),
+    ]);
+
     const settings: SystemSettingsShape =
       await this.systemSettings.getSettings();
     const monthlyPrice = Number(settings.payments?.monthlyPrice ?? 9.99);
     const mrr = Number((proUsers * monthlyPrice).toFixed(2));
     const arr = Number((mrr * 12).toFixed(2));
-    const recentUsers = await this.prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        createdAt: true,
-        isActive: true,
-        isPro: true,
-      },
-    });
-    const recentBoards = await this.prisma.board.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: { id: true, title: true, createdAt: true, isArchived: true },
-    });
     return {
       users: { total: totalUsers, active: activeUsers, pro: proUsers },
       boards: { total: totalBoards, archived: archivedBoards },
