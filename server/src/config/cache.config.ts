@@ -1,4 +1,4 @@
-import { CacheModuleOptions } from '@nestjs/cache-manager';
+import { CacheModuleOptions } from "@nestjs/cache-manager";
 
 export const cacheConfig: CacheModuleOptions = {
   isGlobal: true,
@@ -7,26 +7,26 @@ export const cacheConfig: CacheModuleOptions = {
   // Use Redis in production, memory in development
   ...(process.env.REDIS_URL
     ? {
-        store: 'redis',
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
+        store: "redis",
+        host: process.env.REDIS_HOST || "localhost",
+        port: parseInt(process.env.REDIS_PORT || "6379"),
         password: process.env.REDIS_PASSWORD,
-        db: parseInt(process.env.REDIS_DB || '0'),
+        db: parseInt(process.env.REDIS_DB || "0"),
       }
     : {
-        store: 'memory',
+        store: "memory",
       }),
 };
 
 // Cache key prefixes for different data types
 export const CACHE_KEYS = {
-  USER: 'user:',
-  BOARD: 'board:',
-  BOARDS_LIST: 'boards:list:',
-  CARD: 'card:',
-  ANALYTICS: 'analytics:',
-  SETTINGS: 'settings:',
-  SEARCH: 'search:',
+  USER: "user:",
+  BOARD: "board:",
+  BOARDS_LIST: "boards:list:",
+  CARD: "card:",
+  ANALYTICS: "analytics:",
+  SETTINGS: "settings:",
+  SEARCH: "search:",
 } as const;
 
 // Cache TTL values in seconds

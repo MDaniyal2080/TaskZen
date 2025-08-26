@@ -1,16 +1,16 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
-import { v4 as uuidv4 } from 'uuid';
+import { Injectable, Inject } from "@nestjs/common";
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import type { Cache } from "cache-manager";
+import { v4 as uuidv4 } from "uuid";
 
 @Injectable()
 export class PasswordResetService {
-  private readonly prefix = 'pwreset:';
+  private readonly prefix = "pwreset:";
 
   constructor(@Inject(CACHE_MANAGER) private readonly cache: Cache) {}
 
   private tokenKey(token: string) {
-    return `${this.prefix}${(token || '').trim()}`;
+    return `${this.prefix}${(token || "").trim()}`;
   }
 
   async createToken(email: string, ttlSec: number): Promise<string> {
@@ -19,8 +19,8 @@ export class PasswordResetService {
     // Pass TTL as a number (seconds) per current typings
     await this.cache.set(
       key,
-      (email || '').toLowerCase().trim(),
-      Math.max(60, Math.floor(Number(ttlSec || 900)))
+      (email || "").toLowerCase().trim(),
+      Math.max(60, Math.floor(Number(ttlSec || 900))),
     );
     return token;
   }

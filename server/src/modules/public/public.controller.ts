@@ -1,11 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
-import { PublicService } from './public.service';
+import { Controller, Get } from "@nestjs/common";
+import { PublicService } from "./public.service";
 
-@Controller('public')
+@Controller("public")
 export class PublicController {
   constructor(private readonly publicService: PublicService) {}
 
-  @Get('settings')
+  @Get("settings")
   async getPublicSettings() {
     return this.publicService.getPublicSettings();
   }

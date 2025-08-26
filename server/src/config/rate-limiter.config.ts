@@ -1,9 +1,9 @@
-import { ThrottlerModuleOptions } from '@nestjs/throttler';
+import { ThrottlerModuleOptions } from "@nestjs/throttler";
 
 export const rateLimiterConfig: ThrottlerModuleOptions = {
   throttlers: [
     {
-      name: 'default',
+      name: "default",
       ttl: 60, // Time window in seconds
       limit: 100, // Number of requests per ttl window
     },
@@ -16,10 +16,10 @@ export const rateLimiterConfig: ThrottlerModuleOptions = {
   skipIf: (context) => {
     // Skip rate limiting for admin users or specific endpoints
     const request = context.switchToHttp().getRequest();
-    const url: string = request.url || '';
-    const isHealthCheck = url === '/health' || url === '/api/v1/health';
-    const isStatus = url === '/status' || url === '/api/v1/status';
-    const isAdmin = request.user?.role === 'ADMIN';
+    const url: string = request.url || "";
+    const isHealthCheck = url === "/health" || url === "/api/v1/health";
+    const isStatus = url === "/status" || url === "/api/v1/status";
+    const isAdmin = request.user?.role === "ADMIN";
 
     return isHealthCheck || isStatus || isAdmin;
   },

@@ -1,16 +1,27 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { 
-  ContentType, 
-  ReportReason, 
-  ReportStatus, 
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
+import {
+  ContentType,
+  ReportReason,
+  ReportStatus,
   ReportPriority,
   ViolationType,
   ViolationSeverity,
   ModActionType,
-  Prisma
-} from '@prisma/client';
-import { CreateReportDto, UpdateReportDto, CreateViolationDto, CreateModerationActionDto, BulkActionDto } from './dto';
+  Prisma,
+} from "@prisma/client";
+import {
+  CreateReportDto,
+  UpdateReportDto,
+  CreateViolationDto,
+  CreateModerationActionDto,
+  BulkActionDto,
+} from "./dto";
 
 @Injectable()
 export class ModerationService {
@@ -22,7 +33,10 @@ export class ModerationService {
     await this.validateContent(dto.contentType, dto.contentId);
 
     // Get reported user based on content type
-    const reportedUserId = await this.getContentOwnerId(dto.contentType, dto.contentId);
+    const reportedUserId = await this.getContentOwnerId(
+      dto.contentType,
+      dto.contentId,
+    );
 
     return this.prisma.contentReport.create({
       data: {
@@ -36,12 +50,12 @@ export class ModerationService {
       },
       include: {
         reporter: {
-          select: { id: true, username: true, email: true }
+          select: { id: true, username: true, email: true },
         },
         reportedUser: {
-          select: { id: true, username: true, email: true }
-        }
-      }
+          select: { id: true, username: true, email: true },
+        },
+      },
     });
   }
 
@@ -52,20 +66,20 @@ export class ModerationService {
     page?: number;
     limit?: number;
     sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
+    sortOrder?: "asc" | "desc";
   }) {
-    const { 
-      status, 
-      contentType, 
-      priority, 
-      page = 1, 
-      limit = 20, 
-      sortBy = 'createdAt',
-      sortOrder = 'desc' 
+    const {
+      status,
+      contentType,
+      priority,
+      page = 1,
+      limit = 20,
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = params;
 
     const where: Prisma.ContentReportWhereInput = {};
-    
+
     if (status) where.status = status;
     if (contentType) where.contentType = contentType;
     if (priority) where.priority = priority;
@@ -78,39 +92,42 @@ export class ModerationService {
         orderBy: { [sortBy]: sortOrder },
         include: {
           reporter: {
-            select: { id: true, username: true, email: true, avatar: true }
+            select: { id: true, username: true, email: true, avatar: true },
           },
           reportedUser: {
-            select: { id: true, username: true, email: true, avatar: true }
+            select: { id: true, username: true, email: true, avatar: true },
           },
           reviewedBy: {
-            select: { id: true, username: true }
+            select: { id: true, username: true },
           },
           violations: {
             include: {
               user: {
-                select: { id: true, username: true, email: true }
-              }
-            }
+                select: { id: true, username: true, email: true },
+              },
+            },
           },
           moderationActions: {
             include: {
               moderator: {
-                select: { id: true, username: true }
-              }
-            }
-          }
-        }
+                select: { id: true, username: true },
+              },
+            },
+          },
+        },
       }),
-      this.prisma.contentReport.count({ where })
+      this.prisma.contentReport.count({ where }),
     ]);
 
     // Fetch actual content details
     const reportsWithContent = await Promise.all(
       reports.map(async (report) => {
-        const content = await this.getContentDetails(report.contentType, report.contentId);
+        const content = await this.getContentDetails(
+          report.contentType,
+          report.contentId,
+        );
         return { ...report, content };
-      })
+      }),
     );
 
     return {
@@ -119,8 +136,8 @@ export class ModerationService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
@@ -129,55 +146,58 @@ export class ModerationService {
       where: { id },
       include: {
         reporter: {
-          select: { id: true, username: true, email: true, avatar: true }
+          select: { id: true, username: true, email: true, avatar: true },
         },
         reportedUser: {
-          select: { id: true, username: true, email: true, avatar: true }
+          select: { id: true, username: true, email: true, avatar: true },
         },
         reviewedBy: {
-          select: { id: true, username: true }
+          select: { id: true, username: true },
         },
         violations: {
           include: {
             user: {
-              select: { id: true, username: true, email: true }
-            }
-          }
+              select: { id: true, username: true, email: true },
+            },
+          },
         },
         moderationActions: {
           include: {
             moderator: {
-              select: { id: true, username: true }
+              select: { id: true, username: true },
             },
             targetUser: {
-              select: { id: true, username: true, email: true }
-            }
-          }
-        }
-      }
+              select: { id: true, username: true, email: true },
+            },
+          },
+        },
+      },
     });
 
     if (!report) {
-      throw new NotFoundException('Report not found');
+      throw new NotFoundException("Report not found");
     }
 
-    const content = await this.getContentDetails(report.contentType, report.contentId);
+    const content = await this.getContentDetails(
+      report.contentType,
+      report.contentId,
+    );
     return { ...report, content };
   }
 
   async updateReport(id: string, dto: UpdateReportDto, reviewerId: string) {
     const report = await this.prisma.contentReport.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!report) {
-      throw new NotFoundException('Report not found');
+      throw new NotFoundException("Report not found");
     }
 
     const updateData: Prisma.ContentReportUpdateInput = {
       ...dto,
       reviewedBy: { connect: { id: reviewerId } },
-      reviewedAt: new Date()
+      reviewedAt: new Date(),
     };
 
     if (dto.status === ReportStatus.RESOLVED) {
@@ -189,20 +209,24 @@ export class ModerationService {
       data: updateData,
       include: {
         reporter: {
-          select: { id: true, username: true, email: true }
+          select: { id: true, username: true, email: true },
         },
         reportedUser: {
-          select: { id: true, username: true, email: true }
+          select: { id: true, username: true, email: true },
         },
         reviewedBy: {
-          select: { id: true, username: true }
-        }
-      }
+          select: { id: true, username: true },
+        },
+      },
     });
   }
 
   // Violations
-  async createViolation(dto: CreateViolationDto, moderatorId: string, reportId?: string) {
+  async createViolation(
+    dto: CreateViolationDto,
+    moderatorId: string,
+    reportId?: string,
+  ) {
     const violation = await this.prisma.violation.create({
       data: {
         userId: dto.userId,
@@ -211,28 +235,34 @@ export class ModerationService {
         description: dto.description,
         evidence: dto.evidence,
         reportId,
-        expiresAt: dto.expiresAt
+        expiresAt: dto.expiresAt,
       },
       include: {
         user: {
-          select: { id: true, username: true, email: true }
+          select: { id: true, username: true, email: true },
         },
-        report: true
-      }
+        report: true,
+      },
     });
 
     // Auto-create moderation action based on severity
     if (dto.autoAction) {
       const action = this.determineAutoAction(dto.severity);
       if (action) {
-        await this.createModerationAction({
-          targetUserId: dto.userId,
-          action,
-          reason: `Auto-action for ${dto.severity} violation: ${dto.description}`,
-          reportId: reportId,
-          violationId: violation.id,
-          duration: action === ModActionType.TEMPORARY_SUSPENSION ? 24 * 7 : undefined // 7 days default
-        }, moderatorId);
+        await this.createModerationAction(
+          {
+            targetUserId: dto.userId,
+            action,
+            reason: `Auto-action for ${dto.severity} violation: ${dto.description}`,
+            reportId: reportId,
+            violationId: violation.id,
+            duration:
+              action === ModActionType.TEMPORARY_SUSPENSION
+                ? 24 * 7
+                : undefined, // 7 days default
+          },
+          moderatorId,
+        );
       }
     }
 
@@ -249,7 +279,7 @@ export class ModerationService {
     const { userId, type, severity, page = 1, limit = 20 } = params;
 
     const where: Prisma.ViolationWhereInput = {};
-    
+
     if (userId) where.userId = userId;
     if (type) where.type = type;
     if (severity) where.severity = severity;
@@ -259,22 +289,22 @@ export class ModerationService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         include: {
           user: {
-            select: { id: true, username: true, email: true, avatar: true }
+            select: { id: true, username: true, email: true, avatar: true },
           },
           report: true,
           actions: {
             include: {
               moderator: {
-                select: { id: true, username: true }
-              }
-            }
-          }
-        }
+                select: { id: true, username: true },
+              },
+            },
+          },
+        },
       }),
-      this.prisma.violation.count({ where })
+      this.prisma.violation.count({ where }),
     ]);
 
     return {
@@ -283,14 +313,17 @@ export class ModerationService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
   // Moderation Actions
-  async createModerationAction(dto: CreateModerationActionDto, moderatorId: string) {
-    const expiresAt = dto.duration 
+  async createModerationAction(
+    dto: CreateModerationActionDto,
+    moderatorId: string,
+  ) {
+    const expiresAt = dto.duration
       ? new Date(Date.now() + dto.duration * 60 * 60 * 1000)
       : undefined;
 
@@ -304,16 +337,16 @@ export class ModerationService {
         metadata: dto.metadata,
         reportId: dto.reportId,
         violationId: dto.violationId,
-        expiresAt
+        expiresAt,
       },
       include: {
         targetUser: {
-          select: { id: true, username: true, email: true }
+          select: { id: true, username: true, email: true },
         },
         moderator: {
-          select: { id: true, username: true }
-        }
-      }
+          select: { id: true, username: true },
+        },
+      },
     });
 
     // Apply the action
@@ -332,7 +365,7 @@ export class ModerationService {
     const { targetUserId, moderatorId, action, page = 1, limit = 20 } = params;
 
     const where: Prisma.ModerationActionWhereInput = {};
-    
+
     if (targetUserId) where.targetUserId = targetUserId;
     if (moderatorId) where.moderatorId = moderatorId;
     if (action) where.action = action;
@@ -342,19 +375,19 @@ export class ModerationService {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         include: {
           targetUser: {
-            select: { id: true, username: true, email: true, avatar: true }
+            select: { id: true, username: true, email: true, avatar: true },
           },
           moderator: {
-            select: { id: true, username: true, avatar: true }
+            select: { id: true, username: true, avatar: true },
           },
           report: true,
-          violation: true
-        }
+          violation: true,
+        },
       }),
-      this.prisma.moderationAction.count({ where })
+      this.prisma.moderationAction.count({ where }),
     ]);
 
     return {
@@ -363,8 +396,8 @@ export class ModerationService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
@@ -372,57 +405,76 @@ export class ModerationService {
   async performBulkAction(dto: BulkActionDto, moderatorId: string) {
     const results = {
       success: [] as string[],
-      failed: [] as { id: string; error: string }[]
+      failed: [] as { id: string; error: string }[],
     };
 
     for (const reportId of dto.reportIds) {
       try {
         switch (dto.action) {
-          case 'resolve':
-            await this.updateReport(reportId, { 
-              status: ReportStatus.RESOLVED 
-            }, moderatorId);
+          case "resolve":
+            await this.updateReport(
+              reportId,
+              {
+                status: ReportStatus.RESOLVED,
+              },
+              moderatorId,
+            );
             break;
-          
-          case 'dismiss':
-            await this.updateReport(reportId, { 
-              status: ReportStatus.DISMISSED 
-            }, moderatorId);
+
+          case "dismiss":
+            await this.updateReport(
+              reportId,
+              {
+                status: ReportStatus.DISMISSED,
+              },
+              moderatorId,
+            );
             break;
-          
-          case 'escalate':
-            await this.updateReport(reportId, { 
-              status: ReportStatus.ESCALATED,
-              priority: ReportPriority.HIGH
-            }, moderatorId);
+
+          case "escalate":
+            await this.updateReport(
+              reportId,
+              {
+                status: ReportStatus.ESCALATED,
+                priority: ReportPriority.HIGH,
+              },
+              moderatorId,
+            );
             break;
-          
-          case 'delete_content':
+
+          case "delete_content":
             const report = await this.getReport(reportId);
             await this.deleteContent(report.contentType, report.contentId);
-            await this.updateReport(reportId, { 
-              status: ReportStatus.RESOLVED 
-            }, moderatorId);
+            await this.updateReport(
+              reportId,
+              {
+                status: ReportStatus.RESOLVED,
+              },
+              moderatorId,
+            );
             break;
-          
-          case 'ban_user':
+
+          case "ban_user":
             const reportForBan = await this.getReport(reportId);
             if (reportForBan.reportedUserId) {
-              await this.createModerationAction({
-                targetUserId: reportForBan.reportedUserId,
-                action: ModActionType.PERMANENT_BAN,
-                reason: dto.reason || 'Bulk action: User ban',
-                reportId
-              }, moderatorId);
+              await this.createModerationAction(
+                {
+                  targetUserId: reportForBan.reportedUserId,
+                  action: ModActionType.PERMANENT_BAN,
+                  reason: dto.reason || "Bulk action: User ban",
+                  reportId,
+                },
+                moderatorId,
+              );
             }
             break;
         }
-        
+
         results.success.push(reportId);
       } catch (error) {
         results.failed.push({
           id: reportId,
-          error: error.message || 'Unknown error'
+          error: error.message || "Unknown error",
         });
       }
     }
@@ -440,48 +492,52 @@ export class ModerationService {
       totalActions,
       recentReports,
       topReporters,
-      topViolators
+      topViolators,
     ] = await Promise.all([
       this.prisma.contentReport.count(),
-      this.prisma.contentReport.count({ where: { status: ReportStatus.PENDING } }),
-      this.prisma.contentReport.count({ where: { status: ReportStatus.RESOLVED } }),
+      this.prisma.contentReport.count({
+        where: { status: ReportStatus.PENDING },
+      }),
+      this.prisma.contentReport.count({
+        where: { status: ReportStatus.RESOLVED },
+      }),
       this.prisma.violation.count(),
       this.prisma.moderationAction.count(),
       this.prisma.contentReport.findMany({
         take: 5,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         include: {
           reporter: { select: { username: true } },
-          reportedUser: { select: { username: true } }
-        }
+          reportedUser: { select: { username: true } },
+        },
       }),
       this.prisma.contentReport.groupBy({
-        by: ['reporterId'],
+        by: ["reporterId"],
         _count: true,
-        orderBy: { _count: { reporterId: 'desc' } },
-        take: 5
+        orderBy: { _count: { reporterId: "desc" } },
+        take: 5,
       }),
       this.prisma.violation.groupBy({
-        by: ['userId'],
+        by: ["userId"],
         _count: true,
-        orderBy: { _count: { userId: 'desc' } },
-        take: 5
-      })
+        orderBy: { _count: { userId: "desc" } },
+        take: 5,
+      }),
     ]);
 
     // Get user details for top reporters and violators
-    const topReporterIds = topReporters.map(r => r.reporterId);
-    const topViolatorIds = topViolators.map(v => v.userId);
-    
+    const topReporterIds = topReporters.map((r) => r.reporterId);
+    const topViolatorIds = topViolators.map((v) => v.userId);
+
     const [reporterDetails, violatorDetails] = await Promise.all([
       this.prisma.user.findMany({
         where: { id: { in: topReporterIds } },
-        select: { id: true, username: true, email: true }
+        select: { id: true, username: true, email: true },
       }),
       this.prisma.user.findMany({
         where: { id: { in: topViolatorIds } },
-        select: { id: true, username: true, email: true }
-      })
+        select: { id: true, username: true, email: true },
+      }),
     ]);
 
     return {
@@ -489,26 +545,27 @@ export class ModerationService {
         totalReports,
         pendingReports,
         resolvedReports,
-        resolutionRate: totalReports > 0 ? (resolvedReports / totalReports) * 100 : 0,
+        resolutionRate:
+          totalReports > 0 ? (resolvedReports / totalReports) * 100 : 0,
         totalViolations,
-        totalActions
+        totalActions,
       },
       recentReports,
-      topReporters: topReporters.map(r => ({
-        user: reporterDetails.find(u => u.id === r.reporterId),
-        count: r._count
+      topReporters: topReporters.map((r) => ({
+        user: reporterDetails.find((u) => u.id === r.reporterId),
+        count: r._count,
       })),
-      topViolators: topViolators.map(v => ({
-        user: violatorDetails.find(u => u.id === v.userId),
-        count: v._count
-      }))
+      topViolators: topViolators.map((v) => ({
+        user: violatorDetails.find((u) => u.id === v.userId),
+        count: v._count,
+      })),
     };
   }
 
   // Helper methods
   private async validateContent(type: ContentType, id: string) {
     let exists = false;
-    
+
     switch (type) {
       case ContentType.BOARD:
         exists = !!(await this.prisma.board.findUnique({ where: { id } }));
@@ -525,36 +582,41 @@ export class ModerationService {
     }
 
     if (!exists) {
-      throw new NotFoundException(`Content of type ${type} with ID ${id} not found`);
+      throw new NotFoundException(
+        `Content of type ${type} with ID ${id} not found`,
+      );
     }
   }
 
-  private async getContentOwnerId(type: ContentType, id: string): Promise<string | null> {
+  private async getContentOwnerId(
+    type: ContentType,
+    id: string,
+  ): Promise<string | null> {
     switch (type) {
       case ContentType.BOARD:
-        const board = await this.prisma.board.findUnique({ 
+        const board = await this.prisma.board.findUnique({
           where: { id },
-          select: { ownerId: true }
+          select: { ownerId: true },
         });
         return board?.ownerId || null;
-      
+
       case ContentType.CARD:
-        const card = await this.prisma.card.findUnique({ 
+        const card = await this.prisma.card.findUnique({
           where: { id },
-          select: { assigneeId: true }
+          select: { assigneeId: true },
         });
         return card?.assigneeId || null;
-      
+
       case ContentType.COMMENT:
-        const comment = await this.prisma.comment.findUnique({ 
+        const comment = await this.prisma.comment.findUnique({
           where: { id },
-          select: { authorId: true }
+          select: { authorId: true },
         });
         return comment?.authorId || null;
-      
+
       case ContentType.USER_PROFILE:
         return id;
-      
+
       default:
         return null;
     }
@@ -563,60 +625,60 @@ export class ModerationService {
   private async getContentDetails(type: ContentType, id: string) {
     switch (type) {
       case ContentType.BOARD:
-        const board = await this.prisma.board.findUnique({ 
+        const board = await this.prisma.board.findUnique({
           where: { id },
-          select: { 
-            id: true, 
-            title: true, 
+          select: {
+            id: true,
+            title: true,
             description: true,
             owner: {
-              select: { id: true, username: true, email: true }
-            }
-          }
+              select: { id: true, username: true, email: true },
+            },
+          },
         });
         return board;
-      
+
       case ContentType.CARD:
-        const card = await this.prisma.card.findUnique({ 
+        const card = await this.prisma.card.findUnique({
           where: { id },
-          select: { 
-            id: true, 
-            title: true, 
+          select: {
+            id: true,
+            title: true,
             description: true,
             assignee: {
-              select: { id: true, username: true, email: true }
-            }
-          }
+              select: { id: true, username: true, email: true },
+            },
+          },
         });
         return card;
-      
+
       case ContentType.COMMENT:
-        const comment = await this.prisma.comment.findUnique({ 
+        const comment = await this.prisma.comment.findUnique({
           where: { id },
-          select: { 
-            id: true, 
+          select: {
+            id: true,
             content: true,
             author: {
-              select: { id: true, username: true, email: true }
-            }
-          }
+              select: { id: true, username: true, email: true },
+            },
+          },
         });
         return comment;
-      
+
       case ContentType.USER_PROFILE:
-        const user = await this.prisma.user.findUnique({ 
+        const user = await this.prisma.user.findUnique({
           where: { id },
-          select: { 
-            id: true, 
-            username: true, 
+          select: {
+            id: true,
+            username: true,
             email: true,
             firstName: true,
             lastName: true,
-            avatar: true
-          }
+            avatar: true,
+          },
         });
         return user;
-      
+
       default:
         return null;
     }
@@ -644,19 +706,21 @@ export class ModerationService {
       case ModActionType.TEMPORARY_SUSPENSION:
         await this.prisma.user.update({
           where: { id: action.targetUserId },
-          data: { isActive: false }
+          data: { isActive: false },
         });
         break;
-      
+
       case ModActionType.CONTENT_REMOVAL:
         // Content removal is handled separately
         break;
-      
+
       // Add more action implementations as needed
     }
   }
 
-  private determineAutoAction(severity: ViolationSeverity): ModActionType | null {
+  private determineAutoAction(
+    severity: ViolationSeverity,
+  ): ModActionType | null {
     switch (severity) {
       case ViolationSeverity.SEVERE:
         return ModActionType.PERMANENT_BAN;

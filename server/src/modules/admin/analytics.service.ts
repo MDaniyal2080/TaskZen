@@ -1,10 +1,20 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { SystemSettingsService } from '../../common/services/system-settings.service';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
+import { SystemSettingsService } from "../../common/services/system-settings.service";
+import type { SystemSettingsShape } from "../../common/services/system-settings.service";
+
+type ProUserLite = {
+  id: string;
+  createdAt: Date;
+  proExpiresAt: Date | null;
+};
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private prisma: PrismaService, private readonly systemSettings: SystemSettingsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly systemSettings: SystemSettingsService,
+  ) {}
 
   async getDashboardStats() {
     const [
@@ -25,7 +35,8 @@ export class AnalyticsService {
       this.getRecentActivities(),
     ]);
 
-    const completionRate = totalCards > 0 ? (completedCards / totalCards) * 100 : 0;
+    const completionRate =
+      totalCards > 0 ? (completedCards / totalCards) * 100 : 0;
 
     return {
       users: {
@@ -63,14 +74,17 @@ export class AnalyticsService {
         isPro: true,
       },
       orderBy: {
-        createdAt: 'asc',
+        createdAt: "asc",
       },
     });
 
     // Group users by date
-    const growthData: Record<string, { total: number; pro: number; free: number }> = {};
-    users.forEach(user => {
-      const date = user.createdAt.toISOString().split('T')[0];
+    const growthData: Record<
+      string,
+      { total: number; pro: number; free: number }
+    > = {};
+    users.forEach((user) => {
+      const date = user.createdAt.toISOString().split("T")[0];
       if (!growthData[date]) {
         growthData[date] = { total: 0, pro: 0, free: 0 };
       }
@@ -100,7 +114,7 @@ export class AnalyticsService {
       },
     });
 
-    const stats = boards.map(board => ({
+    const stats = boards.map((board) => ({
       id: board.id,
       title: board.title,
       listsCount: board._count.lists,
@@ -113,10 +127,13 @@ export class AnalyticsService {
     return {
       boards: stats,
       totalBoards: boards.length,
-      privateBoards: boards.filter(b => b.isPrivate).length,
-      archivedBoards: boards.filter(b => b.isArchived).length,
-      averageLists: stats.reduce((acc, b) => acc + b.listsCount, 0) / (boards.length || 1),
-      averageMembers: stats.reduce((acc, b) => acc + b.membersCount, 0) / (boards.length || 1),
+      privateBoards: boards.filter((b) => b.isPrivate).length,
+      archivedBoards: boards.filter((b) => b.isArchived).length,
+      averageLists:
+        stats.reduce((acc, b) => acc + b.listsCount, 0) / (boards.length || 1),
+      averageMembers:
+        stats.reduce((acc, b) => acc + b.membersCount, 0) /
+        (boards.length || 1),
     };
   }
 
@@ -125,7 +142,7 @@ export class AnalyticsService {
     startDate.setDate(startDate.getDate() - days);
 
     const activities = await this.prisma.activity.groupBy({
-      by: ['type', 'createdAt'],
+      by: ["type", "createdAt"],
       where: {
         createdAt: {
           gte: startDate,
@@ -138,17 +155,18 @@ export class AnalyticsService {
 
     // Process activities by day and type
     const metricsMap = new Map<string, Record<string, number>>();
-    
-    activities.forEach(activity => {
-      const date = activity.createdAt.toISOString().split('T')[0];
-      const key = `${date}-${activity.type}`;
-      
+
+    activities.forEach((activity) => {
+      const date = activity.createdAt.toISOString().split("T")[0];
+      const _key = `${date}-${activity.type}`;
+
       if (!metricsMap.has(date)) {
         metricsMap.set(date, {} as Record<string, number>);
       }
-      
+
       const dayMetrics = metricsMap.get(date)!;
-      dayMetrics[activity.type] = (dayMetrics[activity.type] || 0) + activity._count.id;
+      dayMetrics[activity.type] =
+        (dayMetrics[activity.type] || 0) + activity._count.id;
     });
 
     return Array.from(metricsMap.entries()).map(([date, metrics]) => ({
@@ -158,23 +176,19 @@ export class AnalyticsService {
   }
 
   async getFeatureUsage() {
-    const [
-      labelsUsage,
-      attachmentsUsage,
-      commentsCount,
-      dueDatesSet,
-    ] = await Promise.all([
-      this.prisma.label.count(),
-      this.prisma.attachment.count(),
-      this.prisma.comment.count(),
-      this.prisma.card.count({
-        where: {
-          dueDate: {
-            not: null,
+    const [labelsUsage, attachmentsUsage, commentsCount, dueDatesSet] =
+      await Promise.all([
+        this.prisma.label.count(),
+        this.prisma.attachment.count(),
+        this.prisma.comment.count(),
+        this.prisma.card.count({
+          where: {
+            dueDate: {
+              not: null,
+            },
           },
-        },
-      }),
-    ]);
+        }),
+      ]);
 
     return {
       labels: labelsUsage,
@@ -194,25 +208,30 @@ export class AnalyticsService {
       },
     });
 
-    const settings = await this.systemSettings.getSettings();
-    const monthlyPrice = Number((settings as any)?.payments?.monthlyPrice ?? 9.99);
+    const settings: SystemSettingsShape =
+      await this.systemSettings.getSettings();
+    const monthlyPrice = Number(settings.payments?.monthlyPrice ?? 9.99);
     const monthlyRevenue = proUsers.length * monthlyPrice;
     const yearlyProjection = monthlyRevenue * 12;
-    const averageCustomerLifetime = this.calculateAverageLifetime(proUsers);
+    const averageCustomerLifetime = this.calculateAverageLifetime(
+      proUsers as ProUserLite[],
+    );
 
     return {
       monthlyRecurringRevenue: parseFloat(monthlyRevenue.toFixed(2)),
       yearlyProjection: parseFloat(yearlyProjection.toFixed(2)),
       totalProUsers: proUsers.length,
       averageCustomerLifetime: parseFloat(averageCustomerLifetime.toFixed(2)),
-      churnRate: parseFloat(this.calculateChurnRate(proUsers).toFixed(2)),
+      churnRate: parseFloat(
+        this.calculateChurnRate(proUsers as ProUserLite[]).toFixed(2),
+      ),
     };
   }
 
-  private calculateAverageLifetime(proUsers: any[]) {
+  private calculateAverageLifetime(proUsers: ProUserLite[]) {
     if (proUsers.length === 0) return 0;
-    
-    const lifetimes = proUsers.map(user => {
+
+    const lifetimes = proUsers.map((user) => {
       const start = new Date(user.createdAt);
       const end = user.proExpiresAt ? new Date(user.proExpiresAt) : new Date();
       return (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24); // Days
@@ -221,20 +240,22 @@ export class AnalyticsService {
     return lifetimes.reduce((a, b) => a + b, 0) / lifetimes.length;
   }
 
-  private calculateChurnRate(proUsers: any[]) {
+  private calculateChurnRate(proUsers: ProUserLite[]) {
     const now = new Date();
-    const expiredUsers = proUsers.filter(user => 
-      user.proExpiresAt && new Date(user.proExpiresAt) < now
+    const expiredUsers = proUsers.filter(
+      (user) => user.proExpiresAt && new Date(user.proExpiresAt) < now,
     );
-    
-    return proUsers.length > 0 ? (expiredUsers.length / proUsers.length) * 100 : 0;
+
+    return proUsers.length > 0
+      ? (expiredUsers.length / proUsers.length) * 100
+      : 0;
   }
 
   private async getRecentActivities(limit: number = 10) {
     return this.prisma.activity.findMany({
       take: limit,
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
       include: {
         user: {

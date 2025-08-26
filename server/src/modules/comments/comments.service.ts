@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { WebsocketGateway } from '../websocket/websocket.gateway';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
+import { WebsocketGateway } from "../websocket/websocket.gateway";
 
 @Injectable()
 export class CommentsService {
@@ -27,16 +31,16 @@ export class CommentsService {
     });
 
     if (!card) {
-      throw new NotFoundException('Card not found');
+      throw new NotFoundException("Card not found");
     }
 
     // Check if user has access to the board
-    const hasAccess = 
+    const hasAccess =
       card.list.board.ownerId === data.authorId ||
-      card.list.board.members.some(m => m.userId === data.authorId);
+      card.list.board.members.some((m) => m.userId === data.authorId);
 
     if (!hasAccess && !card.list.board.isPrivate) {
-      throw new ForbiddenException('No access to this board');
+      throw new ForbiddenException("No access to this board");
     }
 
     const comment = await this.prisma.comment.create({
@@ -61,7 +65,7 @@ export class CommentsService {
     // Create activity log
     const activity = await this.prisma.activity.create({
       data: {
-        type: 'COMMENT_ADDED',
+        type: "COMMENT_ADDED",
         userId: data.authorId,
         cardId: data.cardId,
         boardId: card.list.board.id,
@@ -84,7 +88,10 @@ export class CommentsService {
     });
 
     // Emit realtime create event
-    this.ws.notifyCommentCreated(card.list.board.id, { cardId: data.cardId, comment });
+    this.ws.notifyCommentCreated(card.list.board.id, {
+      cardId: data.cardId,
+      comment,
+    });
     this.ws.notifyActivityCreated(card.list.board.id, activity);
 
     return comment;
@@ -104,7 +111,7 @@ export class CommentsService {
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -114,11 +121,11 @@ export class CommentsService {
     });
 
     if (!comment) {
-      throw new NotFoundException('Comment not found');
+      throw new NotFoundException("Comment not found");
     }
 
     if (comment.authorId !== userId) {
-      throw new ForbiddenException('You can only edit your own comments');
+      throw new ForbiddenException("You can only edit your own comments");
     }
 
     const updated = await this.prisma.comment.update({
@@ -142,7 +149,10 @@ export class CommentsService {
       include: { list: { include: { board: true } } },
     });
     if (card) {
-      this.ws.notifyCommentUpdated(card.list.board.id, { cardId: comment.cardId, comment: updated });
+      this.ws.notifyCommentUpdated(card.list.board.id, {
+        cardId: comment.cardId,
+        comment: updated,
+      });
     }
     return updated;
   }
@@ -164,20 +174,22 @@ export class CommentsService {
     });
 
     if (!comment) {
-      throw new NotFoundException('Comment not found');
+      throw new NotFoundException("Comment not found");
     }
 
     // Allow deletion if user is comment author or board owner
-    const canDelete = 
-      comment.authorId === userId || 
-      comment.card.list.board.ownerId === userId;
+    const canDelete =
+      comment.authorId === userId || comment.card.list.board.ownerId === userId;
 
     if (!canDelete) {
-      throw new ForbiddenException('You cannot delete this comment');
+      throw new ForbiddenException("You cannot delete this comment");
     }
 
     // Emit before delete (we have boardId and cardId from loaded comment)
-    this.ws.notifyCommentDeleted(comment.card.list.board.id, { cardId: comment.cardId, id });
+    this.ws.notifyCommentDeleted(comment.card.list.board.id, {
+      cardId: comment.cardId,
+      id,
+    });
 
     return this.prisma.comment.delete({
       where: { id },

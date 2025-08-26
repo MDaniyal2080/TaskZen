@@ -1,6 +1,6 @@
 export const notificationTemplates = {
   welcome: (username: string) => ({
-    subject: 'Welcome to TaskZen!',
+    subject: "Welcome to TaskZen!",
     html: `
       <!DOCTYPE html>
       <html>
@@ -55,7 +55,11 @@ export const notificationTemplates = {
     `,
   }),
 
-  boardInvite: (inviterName: string, boardName: string, inviteLink: string) => ({
+  boardInvite: (
+    inviterName: string,
+    boardName: string,
+    inviteLink: string,
+  ) => ({
     subject: `${inviterName} invited you to join "${boardName}" on TaskZen`,
     html: `
       <!DOCTYPE html>
@@ -86,7 +90,12 @@ export const notificationTemplates = {
     text: `${inviterName} invited you to join "${boardName}" on TaskZen. Accept invitation: ${inviteLink}`,
   }),
 
-  taskAssigned: (assigneeName: string, taskTitle: string, boardName: string, taskLink: string) => ({
+  taskAssigned: (
+    assigneeName: string,
+    taskTitle: string,
+    boardName: string,
+    taskLink: string,
+  ) => ({
     subject: `You've been assigned to "${taskTitle}"`,
     html: `
       <!DOCTYPE html>
@@ -151,7 +160,12 @@ export const notificationTemplates = {
     text: `Reminder: "${taskTitle}" is due on ${dueDate}. View task: ${taskLink}`,
   }),
 
-  comment: (commenterName: string, taskTitle: string, comment: string, taskLink: string) => ({
+  comment: (
+    commenterName: string,
+    taskTitle: string,
+    comment: string,
+    taskLink: string,
+  ) => ({
     subject: `${commenterName} commented on "${taskTitle}"`,
     html: `
       <!DOCTYPE html>

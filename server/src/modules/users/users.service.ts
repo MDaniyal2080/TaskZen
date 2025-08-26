@@ -1,8 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { UpdateUserDto } from './dto/update-user.dto';
-import * as bcrypt from 'bcryptjs';
-import { CreateUserDto } from './dto/create-user.dto';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
+import { UpdateUserDto } from "./dto/update-user.dto";
+import * as bcrypt from "bcryptjs";
+import { CreateUserDto } from "./dto/create-user.dto";
 
 @Injectable()
 export class UsersService {
@@ -54,7 +58,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException("User not found");
     }
 
     return user;
@@ -102,7 +106,7 @@ export class UsersService {
   }
 
   async upgradeToPro(userId: string, duration: string) {
-    const durationDays = duration === 'yearly' ? 365 : 30;
+    const durationDays = duration === "yearly" ? 365 : 30;
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + durationDays);
 
@@ -170,7 +174,7 @@ export class UsersService {
 
   async remove(id: string) {
     const user = await this.findById(id);
-    
+
     return this.prisma.user.delete({
       where: { id },
     });
@@ -178,7 +182,7 @@ export class UsersService {
 
   async deactivate(id: string) {
     const user = await this.findById(id);
-    
+
     return this.prisma.user.update({
       where: { id },
       data: { isActive: false },
@@ -200,7 +204,7 @@ export class UsersService {
 
   async activate(id: string) {
     const user = await this.findById(id);
-    
+
     return this.prisma.user.update({
       where: { id },
       data: { isActive: true },
@@ -222,10 +226,10 @@ export class UsersService {
 
   async upgradeToProUser(id: string, expiresAt?: Date) {
     const user = await this.findById(id);
-    
+
     return this.prisma.user.update({
       where: { id },
-      data: { 
+      data: {
         isPro: true,
         proExpiresAt: expiresAt,
       },
@@ -246,19 +250,26 @@ export class UsersService {
     });
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException("User not found");
     }
 
     const isValid = await bcrypt.compare(currentPassword, user.password);
     if (!isValid) {
-      throw new BadRequestException('Current password is incorrect');
+      throw new BadRequestException("Current password is incorrect");
     }
 
     const hashed = await bcrypt.hash(newPassword, 10);
-    await this.prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashed },
+    });
 
     return { success: true };
   }
@@ -271,7 +282,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException("User not found");
     }
 
     const defaults = {
@@ -303,7 +314,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException("User not found");
     }
 
     const defaults = {

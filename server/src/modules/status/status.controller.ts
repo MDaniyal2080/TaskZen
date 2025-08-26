@@ -1,7 +1,7 @@
-import { Controller, Get } from '@nestjs/common';
-import { SystemSettingsService } from '../../common/services/system-settings.service';
+import { Controller, Get } from "@nestjs/common";
+import { SystemSettingsService } from "../../common/services/system-settings.service";
 
-@Controller('status')
+@Controller("status")
 export class StatusController {
   constructor(private readonly settings: SystemSettingsService) {}
 
@@ -23,7 +23,9 @@ export class StatusController {
       features: {
         enableRegistration: Boolean(features.enableRegistration ?? true),
         enableGoogleAuth: Boolean(features.enableGoogleAuth ?? false),
-        enableEmailNotifications: Boolean(features.enableEmailNotifications ?? true),
+        enableEmailNotifications: Boolean(
+          features.enableEmailNotifications ?? true,
+        ),
         enableRealTimeUpdates: Boolean(features.enableRealTimeUpdates ?? true),
         enableFileUploads: Boolean(features.enableFileUploads ?? true),
         enableComments: Boolean(features.enableComments ?? true),

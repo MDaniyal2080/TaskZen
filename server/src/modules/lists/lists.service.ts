@@ -1,9 +1,13 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { BoardMemberRole, ActivityType } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
-import { BoardsService } from '../boards/boards.service';
-import { CreateListDto, UpdateListDto } from './dto/list.dto';
-import { WebsocketGateway } from '../websocket/websocket.gateway';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from "@nestjs/common";
+import { BoardMemberRole, ActivityType } from "@prisma/client";
+import { PrismaService } from "../../database/prisma.service";
+import { BoardsService } from "../boards/boards.service";
+import { CreateListDto, UpdateListDto } from "./dto/list.dto";
+import { WebsocketGateway } from "../websocket/websocket.gateway";
 
 @Injectable()
 export class ListsService {
@@ -13,20 +17,28 @@ export class ListsService {
     private ws: WebsocketGateway,
   ) {}
 
-  async create(createListDto: CreateListDto, userId: string, userRole?: string) {
+  async create(
+    createListDto: CreateListDto,
+    userId: string,
+    userRole?: string,
+  ) {
     // Verify user has access to the board and fetch members for role checks
-    const board = await this.boardsService.findOne(createListDto.boardId, userId, userRole);
+    const board = await this.boardsService.findOne(
+      createListDto.boardId,
+      userId,
+      userRole,
+    );
 
     // Restrict viewers
     const member = board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot create lists');
+      throw new ForbiddenException("Viewers cannot create lists");
     }
 
     // Get the highest position for new list
     const lastList = await this.prisma.list.findFirst({
       where: { boardId: createListDto.boardId },
-      orderBy: { position: 'desc' },
+      orderBy: { position: "desc" },
     });
 
     const position = lastList ? lastList.position + 1000 : 1000;
@@ -38,7 +50,7 @@ export class ListsService {
       },
       include: {
         cards: {
-          orderBy: { position: 'asc' },
+          orderBy: { position: "asc" },
           include: {
             assignee: {
               select: {
@@ -67,11 +79,21 @@ export class ListsService {
         type: ActivityType.LIST_CREATED,
         userId,
         boardId: createListDto.boardId,
-        data: { id: newList.id, title: newList.title, position: newList.position },
+        data: {
+          id: newList.id,
+          title: newList.title,
+          position: newList.position,
+        },
       },
       include: {
         user: {
-          select: { id: true, username: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });
@@ -84,14 +106,14 @@ export class ListsService {
     await this.boardsService.findOne(boardId, userId);
 
     return this.prisma.list.findMany({
-      where: { 
+      where: {
         boardId,
         isArchived: false,
       },
       include: {
         cards: {
           where: { isArchived: false },
-          orderBy: { position: 'asc' },
+          orderBy: { position: "asc" },
           include: {
             assignee: {
               select: {
@@ -110,7 +132,7 @@ export class ListsService {
           },
         },
       },
-      orderBy: { position: 'asc' },
+      orderBy: { position: "asc" },
     });
   }
 
@@ -124,7 +146,7 @@ export class ListsService {
           },
         },
         cards: {
-          orderBy: { position: 'asc' },
+          orderBy: { position: "asc" },
           include: {
             assignee: {
               select: {
@@ -146,7 +168,7 @@ export class ListsService {
     });
 
     if (!list) {
-      throw new NotFoundException('List not found');
+      throw new NotFoundException("List not found");
     }
 
     // Verify user has access to the board
@@ -155,14 +177,23 @@ export class ListsService {
     return list;
   }
 
-  async update(id: string, updateListDto: UpdateListDto, userId: string, userRole?: string) {
+  async update(
+    id: string,
+    updateListDto: UpdateListDto,
+    userId: string,
+    userRole?: string,
+  ) {
     const list = await this.findOne(id, userId);
 
     // Restrict viewers
-    const board = await this.boardsService.findOne(list.boardId, userId, userRole);
+    const board = await this.boardsService.findOne(
+      list.boardId,
+      userId,
+      userRole,
+    );
     const member = board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot update lists');
+      throw new ForbiddenException("Viewers cannot update lists");
     }
 
     const updated = await this.prisma.list.update({
@@ -170,7 +201,7 @@ export class ListsService {
       data: updateListDto,
       include: {
         cards: {
-          orderBy: { position: 'asc' },
+          orderBy: { position: "asc" },
           include: {
             assignee: {
               select: {
@@ -203,7 +234,13 @@ export class ListsService {
       },
       include: {
         user: {
-          select: { id: true, username: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });
@@ -215,10 +252,14 @@ export class ListsService {
     const list = await this.findOne(id, userId);
 
     // Restrict viewers
-    const board = await this.boardsService.findOne(list.boardId, userId, userRole);
+    const board = await this.boardsService.findOne(
+      list.boardId,
+      userId,
+      userRole,
+    );
     const member = board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot delete lists');
+      throw new ForbiddenException("Viewers cannot delete lists");
     }
 
     // Activity: list deleted (emit before deletion)
@@ -231,7 +272,13 @@ export class ListsService {
       },
       include: {
         user: {
-          select: { id: true, username: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });
@@ -246,27 +293,36 @@ export class ListsService {
     return removed;
   }
 
-  async updatePosition(id: string, position: number, userId: string, userRole?: string) {
+  async updatePosition(
+    id: string,
+    position: number,
+    userId: string,
+    userRole?: string,
+  ) {
     const list = await this.findOne(id, userId);
 
     // Restrict viewers
-    const board = await this.boardsService.findOne(list.boardId, userId, userRole);
+    const board = await this.boardsService.findOne(
+      list.boardId,
+      userId,
+      userRole,
+    );
     const member = board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot update lists');
+      throw new ForbiddenException("Viewers cannot update lists");
     }
 
     // Load all non-archived lists for this board to compute the new order
     const lists = await this.prisma.list.findMany({
       where: { boardId: list.boardId, isArchived: false },
-      orderBy: { position: 'asc' },
+      orderBy: { position: "asc" },
       select: { id: true, position: true },
     });
 
     const currentIndex = lists.findIndex((l) => l.id === id);
     if (currentIndex === -1) {
       // Should not happen since we already fetched the list
-      throw new NotFoundException('List not found');
+      throw new NotFoundException("List not found");
     }
 
     // Treat incoming `position` as target index and clamp
@@ -281,7 +337,14 @@ export class ListsService {
 
     // Reindex all positions to sequential integers based on the new order
     const updates = reordered
-      .map((l, idx) => (l.position !== idx ? this.prisma.list.update({ where: { id: l.id }, data: { position: idx } }) : null))
+      .map((l, idx) =>
+        l.position !== idx
+          ? this.prisma.list.update({
+              where: { id: l.id },
+              data: { position: idx },
+            })
+          : null,
+      )
       .filter((u): u is NonNullable<typeof u> => Boolean(u));
 
     if (updates.length) {
@@ -304,7 +367,13 @@ export class ListsService {
       },
       include: {
         user: {
-          select: { id: true, username: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });

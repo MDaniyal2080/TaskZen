@@ -1,13 +1,22 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { unlink } from 'fs/promises';
-import { join } from 'path';
-import { S3Service } from '../../common/services/s3.service';
-import { WebsocketGateway } from '../websocket/websocket.gateway';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
+import { unlink } from "fs/promises";
+import { join } from "path";
+import { S3Service } from "../../common/services/s3.service";
+import { WebsocketGateway } from "../websocket/websocket.gateway";
+import type { Attachment } from "@prisma/client";
 
 @Injectable()
 export class AttachmentsService {
-  constructor(private prisma: PrismaService, private readonly s3: S3Service, private readonly ws: WebsocketGateway) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly s3: S3Service,
+    private readonly ws: WebsocketGateway,
+  ) {}
 
   async create(data: {
     cardId: string;
@@ -35,23 +44,25 @@ export class AttachmentsService {
     });
 
     if (!card) {
-      throw new NotFoundException('Card not found');
+      throw new NotFoundException("Card not found");
     }
 
     // Check if user has access to the board
-    const hasAccess = 
+    const hasAccess =
       card.list.board.ownerId === data.userId ||
-      card.list.board.members.some(m => m.userId === data.userId);
+      card.list.board.members.some((m) => m.userId === data.userId);
 
     if (!hasAccess && card.list.board.isPrivate) {
-      throw new ForbiddenException('No access to this board');
+      throw new ForbiddenException("No access to this board");
     }
 
     const isS3 = Boolean(data.key);
 
     const attachment = await this.prisma.attachment.create({
       data: {
-        filename: data.filename || (data.key ? data.key.split('/').pop() || 'file' : ''),
+        filename:
+          data.filename ||
+          (data.key ? data.key.split("/").pop() || "file" : ""),
         originalName: data.originalName,
         mimeType: data.mimeType,
         size: data.size,
@@ -64,12 +75,12 @@ export class AttachmentsService {
     // Create activity log
     await this.prisma.activity.create({
       data: {
-        type: 'CARD_UPDATED',
+        type: "CARD_UPDATED",
         userId: data.userId,
         cardId: data.cardId,
         boardId: card.list.board.id,
         data: {
-          action: 'attachment_added',
+          action: "attachment_added",
           filename: data.originalName,
           cardTitle: card.title,
         },
@@ -77,35 +88,47 @@ export class AttachmentsService {
     });
 
     // For S3-backed attachments, return with a temporary download URL for convenience
-    let result: any;
+    let result: Attachment;
     if (isS3) {
-      const signedUrl = await this.s3.getPresignedDownloadUrl(attachment.url).catch(() => null);
-      result = { ...attachment, url: signedUrl || this.s3.buildPublicUrl(attachment.url) } as any;
+      const signedUrl = await this.s3
+        .getPresignedDownloadUrl(attachment.url)
+        .catch(() => null);
+      const withUrl: Attachment = {
+        ...attachment,
+        url: signedUrl || this.s3.buildPublicUrl(attachment.url),
+      };
+      result = withUrl;
     } else {
-      result = attachment as any;
+      result = attachment;
     }
 
     // Emit real-time update with the current full attachments list (presigned URLs for S3)
     const updatedAttachments = await this.findByCard(data.cardId);
-    this.ws.notifyCardUpdated(card.list.board.id, { id: data.cardId, attachments: updatedAttachments });
+    this.ws.notifyCardUpdated(card.list.board.id, {
+      id: data.cardId,
+      attachments: updatedAttachments,
+    });
 
     return result;
   }
 
-  async findByCard(cardId: string) {
+  async findByCard(cardId: string): Promise<Attachment[]> {
     const items = await this.prisma.attachment.findMany({
       where: { cardId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     // Augment with presigned download URLs if stored on S3
-    const results = await Promise.all(
-      items.map(async (a) => {
-        if (a.url && !a.url.startsWith('/uploads/')) {
-          const url = await this.s3.getPresignedDownloadUrl(a.url).catch(() => this.s3.buildPublicUrl(a.url));
-          return { ...a, url } as any;
+    const results: Attachment[] = await Promise.all(
+      items.map(async (a): Promise<Attachment> => {
+        if (a.url && !a.url.startsWith("/uploads/")) {
+          const url = await this.s3
+            .getPresignedDownloadUrl(a.url)
+            .catch(() => this.s3.buildPublicUrl(a.url));
+          const updated: Attachment = { ...a, url };
+          return updated;
         }
-        return a as any;
-      })
+        return a;
+      }),
     );
     return results;
   }
@@ -127,11 +150,11 @@ export class AttachmentsService {
     });
 
     if (!attachment) {
-      throw new NotFoundException('Attachment not found');
+      throw new NotFoundException("Attachment not found");
     }
 
     // Check if user has permission to delete
-    const canDelete = 
+    const canDelete =
       attachment.card.list.board.ownerId === userId ||
       attachment.card.assigneeId === userId;
 
@@ -145,13 +168,13 @@ export class AttachmentsService {
         },
       });
 
-      if (!member || member.role === 'VIEWER') {
-        throw new ForbiddenException('You cannot delete this attachment');
+      if (!member || member.role === "VIEWER") {
+        throw new ForbiddenException("You cannot delete this attachment");
       }
     }
 
     // Delete object from storage
-    if (attachment.url && !attachment.url.startsWith('/uploads/')) {
+    if (attachment.url && !attachment.url.startsWith("/uploads/")) {
       // S3-backed
       await this.s3.deleteObject(attachment.url);
     } else {
@@ -167,12 +190,12 @@ export class AttachmentsService {
     // Create activity log
     await this.prisma.activity.create({
       data: {
-        type: 'CARD_UPDATED',
+        type: "CARD_UPDATED",
         userId,
         cardId: attachment.cardId,
         boardId: attachment.card.list.board.id,
         data: {
-          action: 'attachment_removed',
+          action: "attachment_removed",
           filename: attachment.originalName,
           cardTitle: attachment.card.title,
         },
@@ -181,18 +204,20 @@ export class AttachmentsService {
 
     // Emit real-time update with remaining attachments (presigned URLs for S3)
     const remaining = await this.findByCard(attachment.cardId);
-    this.ws.notifyCardUpdated(attachment.card.list.board.id, { id: attachment.cardId, attachments: remaining });
+    this.ws.notifyCardUpdated(attachment.card.list.board.id, {
+      id: attachment.cardId,
+      attachments: remaining,
+    });
 
     return deleted;
   }
 
   private async deleteFile(filename: string) {
     try {
-      const filePath = join(process.cwd(), 'uploads', filename);
+      const filePath = join(process.cwd(), "uploads", filename);
       await unlink(filePath);
     } catch (error) {
-      console.error('Failed to delete file:', error);
+      console.error("Failed to delete file:", error);
     }
   }
 }
-

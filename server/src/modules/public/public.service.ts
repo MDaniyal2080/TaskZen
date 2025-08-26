@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { SystemSettingsService } from '../../common/services/system-settings.service';
+import { Injectable } from "@nestjs/common";
+import { SystemSettingsService } from "../../common/services/system-settings.service";
 
 @Injectable()
 export class PublicService {
@@ -11,39 +11,41 @@ export class PublicService {
 
       // Return only public-safe settings
       return {
-        siteName: (settings as any)?.general?.siteName || 'TaskZen',
+        siteName: settings.general?.siteName ?? "TaskZen",
         features: {
-          enableRegistration: (settings as any)?.features?.enableRegistration ?? true,
-          enableGoogleAuth: (settings as any)?.features?.enableGoogleAuth ?? false,
-          enablePublicBoards: (settings as any)?.features?.enablePublicBoards ?? false,
-          enableRealTimeUpdates: (settings as any)?.features?.enableRealTimeUpdates ?? true,
-          enableComments: (settings as any)?.features?.enableComments ?? true,
-          enableFileUploads: (settings as any)?.features?.enableFileUploads ?? true,
-          enableAnalytics: (settings as any)?.features?.enableAnalytics ?? true,
-          enableEmailNotifications: (settings as any)?.features?.enableEmailNotifications ?? true,
+          enableRegistration: settings.features?.enableRegistration ?? true,
+          enableGoogleAuth: settings.features?.enableGoogleAuth ?? false,
+          enablePublicBoards: settings.features?.enablePublicBoards ?? false,
+          enableRealTimeUpdates:
+            settings.features?.enableRealTimeUpdates ?? true,
+          enableComments: settings.features?.enableComments ?? true,
+          enableFileUploads: settings.features?.enableFileUploads ?? true,
+          enableAnalytics: settings.features?.enableAnalytics ?? true,
+          enableEmailNotifications:
+            settings.features?.enableEmailNotifications ?? true,
         },
         maintenance: {
-          enabled: (settings as any)?.maintenance?.enabled ?? false,
-          message: (settings as any)?.maintenance?.message || '',
-          scheduledAt: (settings as any)?.maintenance?.scheduledAt || null,
-          estimatedDuration: (settings as any)?.maintenance?.estimatedDuration || null,
+          enabled: settings.maintenance?.enabled ?? false,
+          message: settings.maintenance?.message ?? "",
+          scheduledAt: settings.maintenance?.scheduledAt ?? null,
+          estimatedDuration: settings.maintenance?.estimatedDuration ?? null,
         },
         limits: {
-          maxBoardsPerUser: Number((settings as any)?.general?.maxBoardsPerUser ?? 3),
+          maxBoardsPerUser: settings.general?.maxBoardsPerUser ?? 3,
         },
         payments: {
-          enabled: (settings as any)?.payments?.enabled ?? true,
-          provider: (settings as any)?.payments?.provider || 'stripe',
-          currency: (settings as any)?.payments?.currency || 'USD',
-          monthlyPrice: Number((settings as any)?.payments?.monthlyPrice ?? 9.99),
-          yearlyPrice: Number((settings as any)?.payments?.yearlyPrice ?? 99.99),
-          trialDays: Number((settings as any)?.payments?.trialDays ?? 14),
+          enabled: settings.payments?.enabled ?? true,
+          provider: settings.payments?.provider ?? "stripe",
+          currency: settings.payments?.currency ?? "USD",
+          monthlyPrice: settings.payments?.monthlyPrice ?? 9.99,
+          yearlyPrice: settings.payments?.yearlyPrice ?? 99.99,
+          trialDays: settings.payments?.trialDays ?? 14,
         },
       };
     } catch (error) {
       // Return defaults if DB is not accessible
       return {
-        siteName: 'TaskZen',
+        siteName: "TaskZen",
         features: {
           enableRegistration: true,
           enableGoogleAuth: false,
@@ -56,7 +58,7 @@ export class PublicService {
         },
         maintenance: {
           enabled: false,
-          message: '',
+          message: "",
           scheduledAt: null,
           estimatedDuration: null,
         },
@@ -65,8 +67,8 @@ export class PublicService {
         },
         payments: {
           enabled: true,
-          provider: 'stripe',
-          currency: 'USD',
+          provider: "stripe",
+          currency: "USD",
           monthlyPrice: 9.99,
           yearlyPrice: 99.99,
           trialDays: 14,
@@ -75,4 +77,3 @@ export class PublicService {
     }
   }
 }
-

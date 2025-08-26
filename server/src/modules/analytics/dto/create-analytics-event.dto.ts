@@ -1,12 +1,12 @@
-import { IsIn, IsOptional, IsString, IsObject } from 'class-validator';
-import { AnalyticsEventTypes, FeatureKeys } from '../types';
+import { IsIn, IsOptional, IsString, IsObject } from "class-validator";
+import { AnalyticsEventTypes, FeatureKeys } from "../types";
 
 export class CreateAnalyticsEventDto {
-  @IsIn(AnalyticsEventTypes as unknown as any[])
+  @IsIn(Array.from(AnalyticsEventTypes))
   type!: (typeof AnalyticsEventTypes)[number];
 
   @IsOptional()
-  @IsIn(FeatureKeys as unknown as any[])
+  @IsIn(Array.from(FeatureKeys))
   feature?: (typeof FeatureKeys)[number];
 
   @IsOptional()
@@ -47,5 +47,5 @@ export class CreateAnalyticsEventDto {
 
   @IsOptional()
   @IsObject()
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }

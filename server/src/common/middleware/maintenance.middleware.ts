@@ -1,13 +1,14 @@
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
-import { SystemSettingsService } from '../services/system-settings.service';
+import { Injectable, NestMiddleware } from "@nestjs/common";
+import { Request, Response, NextFunction } from "express";
+import { SystemSettingsService } from "../services/system-settings.service";
+import type { MaintenanceSettings } from "../services/system-settings.service";
 
 @Injectable()
 export class MaintenanceMiddleware implements NestMiddleware {
   constructor(private readonly settingsService: SystemSettingsService) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
-    const url = req.originalUrl || req.url || '';
+    const url = req.originalUrl || req.url || "";
 
     // Always allow these paths
     const allowedPatterns = [
@@ -22,7 +23,10 @@ export class MaintenanceMiddleware implements NestMiddleware {
     if (allowedPatterns.some((p) => p.test(url))) return next();
 
     const settings = await this.settingsService.getSettings();
-    const maintenance = settings?.maintenance || { enabled: false } as any;
+    const maintenance: MaintenanceSettings = {
+      enabled: false,
+      ...(settings?.maintenance ?? {}),
+    };
 
     if (!maintenance?.enabled) return next();
 
@@ -31,8 +35,8 @@ export class MaintenanceMiddleware implements NestMiddleware {
     // Return 503 Service Unavailable with message for clients
     res.status(503).json({
       statusCode: 503,
-      error: 'Service Unavailable',
-      message: maintenance.message || 'The service is under maintenance.',
+      error: "Service Unavailable",
+      message: maintenance.message || "The service is under maintenance.",
       maintenance: {
         enabled: true,
         message: maintenance.message || null,

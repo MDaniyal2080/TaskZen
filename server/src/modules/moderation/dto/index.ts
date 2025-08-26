@@ -1,5 +1,24 @@
-import { IsEnum, IsString, IsOptional, IsArray, IsUUID, IsNumber, IsBoolean, IsDateString, IsObject, IsIn } from 'class-validator';
-import { ContentType, ReportReason, ReportStatus, ReportPriority, ViolationType, ViolationSeverity, ModActionType } from '@prisma/client';
+import {
+  IsEnum,
+  IsString,
+  IsOptional,
+  IsArray,
+  IsUUID,
+  IsNumber,
+  IsBoolean,
+  IsDateString,
+  IsObject,
+  IsIn,
+} from "class-validator";
+import {
+  ContentType,
+  ReportReason,
+  ReportStatus,
+  ReportPriority,
+  ViolationType,
+  ViolationSeverity,
+  ModActionType,
+} from "@prisma/client";
 
 export class CreateReportDto {
   @IsEnum(ContentType)
@@ -92,8 +111,8 @@ export class BulkActionDto {
   @IsString({ each: true })
   reportIds: string[];
 
-  @IsIn(['resolve', 'dismiss', 'escalate', 'delete_content', 'ban_user'])
-  action: 'resolve' | 'dismiss' | 'escalate' | 'delete_content' | 'ban_user';
+  @IsIn(["resolve", "dismiss", "escalate", "delete_content", "ban_user"])
+  action: "resolve" | "dismiss" | "escalate" | "delete_content" | "ban_user";
 
   @IsOptional()
   @IsString()
@@ -126,8 +145,8 @@ export class GetReportsQueryDto {
   sortBy?: string;
 
   @IsOptional()
-  @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc';
+  @IsIn(["asc", "desc"])
+  sortOrder?: "asc" | "desc";
 }
 
 export class GetViolationsQueryDto {

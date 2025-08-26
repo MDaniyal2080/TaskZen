@@ -1,13 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, InternalServerErrorException, Logger } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { ListsService } from '../lists/lists.service';
-import { CreateCardDto, UpdateCardDto } from './dto/card.dto';
-import { WebsocketGateway } from '../websocket/websocket.gateway';
-import * as fs from 'fs';
-import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import { BoardMemberRole } from '@prisma/client';
-import { SystemSettingsService } from '../../common/services/system-settings.service';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  InternalServerErrorException,
+  Logger,
+} from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
+import { ListsService } from "../lists/lists.service";
+import { CreateCardDto, UpdateCardDto } from "./dto/card.dto";
+import { WebsocketGateway } from "../websocket/websocket.gateway";
+import * as fs from "fs";
+import * as path from "path";
+import { v4 as uuidv4 } from "uuid";
+import { BoardMemberRole } from "@prisma/client";
+import { SystemSettingsService } from "../../common/services/system-settings.service";
 
 @Injectable()
 export class CardsService {
@@ -19,14 +26,18 @@ export class CardsService {
     private systemSettings: SystemSettingsService,
   ) {}
 
-  async create(createCardDto: CreateCardDto, userId: string, userRole?: string) {
+  async create(
+    createCardDto: CreateCardDto,
+    userId: string,
+    userRole?: string,
+  ) {
     // Verify user has access to the list
     const list = await this.listsService.findOne(createCardDto.listId, userId);
 
     // Restrict viewers
     const member = list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot create cards');
+      throw new ForbiddenException("Viewers cannot create cards");
     }
 
     // Enforce max cards per board for free plan (value from system settings)
@@ -40,11 +51,13 @@ export class CardsService {
       },
     });
     if (!board) {
-      throw new NotFoundException('Board not found');
+      throw new NotFoundException("Board not found");
     }
 
     const settings = await this.systemSettings.getSettings();
-    const MAX_CARDS_PER_BOARD = Number((settings as any)?.general?.maxCardsPerBoard ?? 100);
+    const MAX_CARDS_PER_BOARD = Number(
+      (settings as any)?.general?.maxCardsPerBoard ?? 100,
+    );
     if (!board.owner.isPro) {
       const cardCount = await this.prisma.card.count({
         where: {
@@ -62,7 +75,7 @@ export class CardsService {
     // Get the highest position for new card
     const lastCard = await this.prisma.card.findFirst({
       where: { listId: createCardDto.listId },
-      orderBy: { position: 'desc' },
+      orderBy: { position: "desc" },
     });
 
     const position = lastCard ? lastCard.position + 1000 : 1000;
@@ -89,7 +102,7 @@ export class CardsService {
         },
         attachments: true,
         checklistItems: {
-          orderBy: { position: 'asc' },
+          orderBy: { position: "asc" },
         },
         comments: {
           include: {
@@ -103,7 +116,7 @@ export class CardsService {
               },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
         },
       },
     });
@@ -113,15 +126,25 @@ export class CardsService {
     // Activity: card created
     const activity = await this.prisma.activity.create({
       data: {
-        type: 'CARD_CREATED',
+        type: "CARD_CREATED",
         userId,
         boardId: list.boardId,
         cardId: created.id,
-        data: { cardId: created.id, listId: created.listId, title: created.title },
+        data: {
+          cardId: created.id,
+          listId: created.listId,
+          title: created.title,
+        },
       },
       include: {
         user: {
-          select: { id: true, username: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });
@@ -134,7 +157,7 @@ export class CardsService {
     await this.listsService.findOne(listId, userId);
 
     return this.prisma.card.findMany({
-      where: { 
+      where: {
         listId,
         isArchived: false,
       },
@@ -155,7 +178,7 @@ export class CardsService {
         },
         attachments: true,
         checklistItems: {
-          orderBy: { position: 'asc' },
+          orderBy: { position: "asc" },
         },
         comments: {
           include: {
@@ -169,10 +192,10 @@ export class CardsService {
               },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
         },
       },
-      orderBy: { position: 'asc' },
+      orderBy: { position: "asc" },
     });
   }
 
@@ -205,7 +228,7 @@ export class CardsService {
         },
         attachments: true,
         checklistItems: {
-          orderBy: { position: 'asc' },
+          orderBy: { position: "asc" },
         },
         comments: {
           include: {
@@ -219,13 +242,13 @@ export class CardsService {
               },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
         },
       },
     });
 
     if (!card) {
-      throw new NotFoundException('Card not found');
+      throw new NotFoundException("Card not found");
     }
 
     // Verify user has access to the board
@@ -234,26 +257,37 @@ export class CardsService {
     return card;
   }
 
-  async update(id: string, updateCardDto: UpdateCardDto, userId: string, userRole?: string) {
+  async update(
+    id: string,
+    updateCardDto: UpdateCardDto,
+    userId: string,
+    userRole?: string,
+  ) {
     const card = await this.findOne(id, userId);
 
     // Restrict viewers
     const member = card.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot update cards');
+      throw new ForbiddenException("Viewers cannot update cards");
     }
 
     // If unarchiving a card on a free plan board, enforce max cards per board
-    if (Object.prototype.hasOwnProperty.call(updateCardDto, 'isArchived') && updateCardDto.isArchived === false && card.isArchived) {
+    if (
+      Object.prototype.hasOwnProperty.call(updateCardDto, "isArchived") &&
+      updateCardDto.isArchived === false &&
+      card.isArchived
+    ) {
       const settings = await this.systemSettings.getSettings();
-      const MAX_CARDS_PER_BOARD = Number((settings as any)?.general?.maxCardsPerBoard ?? 100);
+      const MAX_CARDS_PER_BOARD = Number(
+        (settings as any)?.general?.maxCardsPerBoard ?? 100,
+      );
 
       const board = await this.prisma.board.findUnique({
         where: { id: card.list.boardId },
         include: { owner: { select: { isPro: true } } },
       });
       if (!board) {
-        throw new NotFoundException('Board not found');
+        throw new NotFoundException("Board not found");
       }
       if (!board.owner.isPro) {
         const cardCount = await this.prisma.card.count({
@@ -301,7 +335,7 @@ export class CardsService {
               },
             },
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: "desc" },
         },
       },
     });
@@ -310,7 +344,7 @@ export class CardsService {
     // Activity: card updated
     const activity = await this.prisma.activity.create({
       data: {
-        type: 'CARD_UPDATED',
+        type: "CARD_UPDATED",
         userId,
         boardId: card.list.boardId,
         cardId: id,
@@ -318,7 +352,13 @@ export class CardsService {
       },
       include: {
         user: {
-          select: { id: true, username: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });
@@ -332,13 +372,13 @@ export class CardsService {
     // Restrict viewers
     const member = card.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot delete cards');
+      throw new ForbiddenException("Viewers cannot delete cards");
     }
 
     // Activity: card deleted (emit/log before deletion)
     const activity = await this.prisma.activity.create({
       data: {
-        type: 'CARD_DELETED',
+        type: "CARD_DELETED",
         userId,
         boardId: card.list.boardId,
         cardId: id,
@@ -346,7 +386,13 @@ export class CardsService {
       },
       include: {
         user: {
-          select: { id: true, username: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });
@@ -366,12 +412,12 @@ export class CardsService {
     userId: string,
     boardId?: string,
     options?: {
-      priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+      priority?: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
       assigneeId?: string;
       labelIds?: string[];
       completed?: boolean;
-      sortBy?: 'dueDate' | 'priority' | 'createdAt' | 'title';
-      sortOrder?: 'asc' | 'desc';
+      sortBy?: "dueDate" | "priority" | "createdAt" | "title";
+      sortOrder?: "asc" | "desc";
     },
   ) {
     // Build the where clause
@@ -407,7 +453,7 @@ export class CardsService {
       where.priority = options.priority;
     }
 
-    if (typeof options?.completed === 'boolean') {
+    if (typeof options?.completed === "boolean") {
       where.isCompleted = options.completed;
     }
 
@@ -424,8 +470,8 @@ export class CardsService {
     }
 
     // Determine sorting
-    const sortBy = options?.sortBy || 'dueDate';
-    const sortOrder = options?.sortOrder || 'asc';
+    const sortBy = options?.sortBy || "dueDate";
+    const sortOrder = options?.sortOrder || "asc";
 
     return this.prisma.card.findMany({
       where,
@@ -456,40 +502,55 @@ export class CardsService {
         },
       },
       orderBy:
-        sortBy === 'dueDate'
+        sortBy === "dueDate"
           ? { dueDate: sortOrder }
-          : sortBy === 'priority'
-          ? { priority: sortOrder }
-          : sortBy === 'createdAt'
-          ? { createdAt: sortOrder }
-          : { title: sortOrder },
+          : sortBy === "priority"
+            ? { priority: sortOrder }
+            : sortBy === "createdAt"
+              ? { createdAt: sortOrder }
+              : { title: sortOrder },
     });
   }
 
-  async moveCard(id: string, listId: string, position: number, userId: string, userRole?: string) {
+  async moveCard(
+    id: string,
+    listId: string,
+    position: number,
+    userId: string,
+    userRole?: string,
+  ) {
     const card = await this.findOne(id, userId);
-    
+
     // Verify user has access to the target list
     const targetList = await this.listsService.findOne(listId, userId);
 
     // Restrict viewers (on both source and target boards)
-    const memberSource = card.list.board.members.find((m) => m.userId === userId);
-    const memberTarget = targetList.board.members.find((m) => m.userId === userId);
-    if ((memberSource && memberSource.role === BoardMemberRole.VIEWER) || (memberTarget && memberTarget.role === BoardMemberRole.VIEWER)) {
-      throw new ForbiddenException('Viewers cannot move cards');
+    const memberSource = card.list.board.members.find(
+      (m) => m.userId === userId,
+    );
+    const memberTarget = targetList.board.members.find(
+      (m) => m.userId === userId,
+    );
+    if (
+      (memberSource && memberSource.role === BoardMemberRole.VIEWER) ||
+      (memberTarget && memberTarget.role === BoardMemberRole.VIEWER)
+    ) {
+      throw new ForbiddenException("Viewers cannot move cards");
     }
 
     // If moving across boards, enforce max cards per board on the target board for free plan
     if (card.list.boardId !== targetList.boardId) {
       const settings = await this.systemSettings.getSettings();
-      const MAX_CARDS_PER_BOARD = Number((settings as any)?.general?.maxCardsPerBoard ?? 100);
+      const MAX_CARDS_PER_BOARD = Number(
+        (settings as any)?.general?.maxCardsPerBoard ?? 100,
+      );
 
       const targetBoard = await this.prisma.board.findUnique({
         where: { id: targetList.boardId },
         include: { owner: { select: { isPro: true } } },
       });
       if (!targetBoard) {
-        throw new NotFoundException('Board not found');
+        throw new NotFoundException("Board not found");
       }
       if (!targetBoard.owner.isPro) {
         const cardCount = await this.prisma.card.count({
@@ -534,7 +595,7 @@ export class CardsService {
     // Activity: card moved
     const activity = await this.prisma.activity.create({
       data: {
-        type: 'CARD_MOVED',
+        type: "CARD_MOVED",
         userId,
         boardId: targetList.boardId,
         cardId: id,
@@ -548,7 +609,13 @@ export class CardsService {
       },
       include: {
         user: {
-          select: { id: true, username: true, firstName: true, lastName: true, avatar: true },
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            avatar: true,
+          },
         },
       },
     });
@@ -556,14 +623,19 @@ export class CardsService {
     return moved;
   }
 
-  async addComment(cardId: string, content: string, userId: string, userRole?: string) {
+  async addComment(
+    cardId: string,
+    content: string,
+    userId: string,
+    userRole?: string,
+  ) {
     // Verify user has access to the card
     const card = await this.findOne(cardId, userId);
 
     // Restrict viewers
     const member = card.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot add comments');
+      throw new ForbiddenException("Viewers cannot add comments");
     }
 
     return this.prisma.comment.create({
@@ -586,32 +658,44 @@ export class CardsService {
     });
   }
 
-  async uploadAttachments(cardId: string, files: Express.Multer.File[], userId: string, userRole?: string) {
+  async uploadAttachments(
+    cardId: string,
+    files: Express.Multer.File[],
+    userId: string,
+    userRole?: string,
+  ) {
     // Verify user has access to the card
     const card = await this.findOne(cardId, userId);
 
     // Restrict viewers
     const member = card.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot upload attachments');
+      throw new ForbiddenException("Viewers cannot upload attachments");
     }
 
     if (!files || files.length === 0) {
       throw new BadRequestException(
-        'No files uploaded. Ensure multipart/form-data with field name "files".'
+        'No files uploaded. Ensure multipart/form-data with field name "files".',
       );
     }
 
     // Resolve absolute upload directory
-    const baseUpload = process.env.UPLOAD_PATH || 'uploads';
-    const uploadDir = path.isAbsolute(baseUpload) ? baseUpload : path.join(process.cwd(), baseUpload);
+    const baseUpload = process.env.UPLOAD_PATH || "uploads";
+    const uploadDir = path.isAbsolute(baseUpload)
+      ? baseUpload
+      : path.join(process.cwd(), baseUpload);
     try {
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
     } catch (e: any) {
-      this.logger.error(`Failed to prepare upload directory '${uploadDir}': ${e?.message}`, e?.stack);
-      throw new InternalServerErrorException('Failed to prepare upload directory');
+      this.logger.error(
+        `Failed to prepare upload directory '${uploadDir}': ${e?.message}`,
+        e?.stack,
+      );
+      throw new InternalServerErrorException(
+        "Failed to prepare upload directory",
+      );
     }
 
     // Track created records for cleanup on failure
@@ -620,7 +704,7 @@ export class CardsService {
       const attachments = [] as any[];
       for (const file of files) {
         // Sanitize filename: use UUID + original extension only
-        const ext = (path.extname(file?.originalname || '') || '').slice(0, 10);
+        const ext = (path.extname(file?.originalname || "") || "").slice(0, 10);
         const filename = `${uuidv4()}${ext}`;
         const filepath = path.join(uploadDir, filename);
 
@@ -635,19 +719,28 @@ export class CardsService {
           } else if (Array.isArray(raw?.data)) {
             data = Buffer.from(raw.data);
           } else {
-            throw new Error('Unsupported buffer format');
+            throw new Error("Unsupported buffer format");
           }
         } catch (e: any) {
-          this.logger.error(`Buffer normalization failed for '${file?.originalname}': ${e?.message}`);
-          throw new BadRequestException('Invalid file payload; could not read file buffer.');
+          this.logger.error(
+            `Buffer normalization failed for '${file?.originalname}': ${e?.message}`,
+          );
+          throw new BadRequestException(
+            "Invalid file payload; could not read file buffer.",
+          );
         }
 
         // Save file to disk
         try {
           fs.writeFileSync(filepath, data);
         } catch (e: any) {
-          this.logger.error(`Failed to write file '${filepath}': ${e?.message}`, e?.stack);
-          throw new InternalServerErrorException(`Failed to save file ${file?.originalname || ''}`);
+          this.logger.error(
+            `Failed to write file '${filepath}': ${e?.message}`,
+            e?.stack,
+          );
+          throw new InternalServerErrorException(
+            `Failed to save file ${file?.originalname || ""}`,
+          );
         }
 
         // Create attachment record
@@ -656,7 +749,7 @@ export class CardsService {
             filename,
             originalName: file.originalname,
             mimeType: file.mimetype,
-            size: typeof file.size === 'number' ? file.size : data.length,
+            size: typeof file.size === "number" ? file.size : data.length,
             url: `/uploads/${filename}`,
             cardId,
           },
@@ -667,8 +760,13 @@ export class CardsService {
       }
 
       // Emit real-time event with full attachments list
-      const allAttachments = await this.prisma.attachment.findMany({ where: { cardId } });
-      this.ws.notifyCardUpdated(card.list.boardId, { id: cardId, attachments: allAttachments });
+      const allAttachments = await this.prisma.attachment.findMany({
+        where: { cardId },
+      });
+      this.ws.notifyCardUpdated(card.list.boardId, {
+        id: cardId,
+        attachments: allAttachments,
+      });
       return attachments;
     } catch (err) {
       // Cleanup best-effort: remove files and DB records created before failure
@@ -687,7 +785,11 @@ export class CardsService {
     }
   }
 
-  async deleteAttachment(attachmentId: string, userId: string, userRole?: string) {
+  async deleteAttachment(
+    attachmentId: string,
+    userId: string,
+    userRole?: string,
+  ) {
     const attachment = await this.prisma.attachment.findUnique({
       where: { id: attachmentId },
       include: {
@@ -700,19 +802,21 @@ export class CardsService {
     });
 
     if (!attachment) {
-      throw new NotFoundException('Attachment not found');
+      throw new NotFoundException("Attachment not found");
     }
 
     // Verify user has access to the card and restrict viewers
     const cardFull = await this.findOne(attachment.cardId, userId);
     const member = cardFull.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot delete attachments');
+      throw new ForbiddenException("Viewers cannot delete attachments");
     }
 
     // Delete file from disk
-    const baseUpload = process.env.UPLOAD_PATH || 'uploads';
-    const uploadDir = path.isAbsolute(baseUpload) ? baseUpload : path.join(process.cwd(), baseUpload);
+    const baseUpload = process.env.UPLOAD_PATH || "uploads";
+    const uploadDir = path.isAbsolute(baseUpload)
+      ? baseUpload
+      : path.join(process.cwd(), baseUpload);
     const filepath = path.join(uploadDir, attachment.filename);
     if (fs.existsSync(filepath)) {
       fs.unlinkSync(filepath);
@@ -724,20 +828,30 @@ export class CardsService {
     });
 
     // Emit real-time event with full attachments list after deletion
-    const remaining = await this.prisma.attachment.findMany({ where: { cardId: attachment.cardId } });
-    this.ws.notifyCardUpdated(attachment.card.list.boardId, { id: attachment.cardId, attachments: remaining });
-    
+    const remaining = await this.prisma.attachment.findMany({
+      where: { cardId: attachment.cardId },
+    });
+    this.ws.notifyCardUpdated(attachment.card.list.boardId, {
+      id: attachment.cardId,
+      attachments: remaining,
+    });
+
     return deleted;
   }
 
-  async addLabel(cardId: string, labelId: string, userId: string, userRole?: string) {
+  async addLabel(
+    cardId: string,
+    labelId: string,
+    userId: string,
+    userRole?: string,
+  ) {
     // Verify user has access to the card
     const card = await this.findOne(cardId, userId);
 
     // Restrict viewers
     const member = card.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot modify labels');
+      throw new ForbiddenException("Viewers cannot modify labels");
     }
 
     // Check if label exists and belongs to the same board
@@ -749,7 +863,7 @@ export class CardsService {
     });
 
     if (!label) {
-      throw new NotFoundException('Label not found or not accessible');
+      throw new NotFoundException("Label not found or not accessible");
     }
 
     // Check if label is already added to card
@@ -778,18 +892,23 @@ export class CardsService {
 
     // Emit real-time event
     this.ws.notifyCardUpdated(card.list.boardId, { id: cardId });
-    
+
     return cardLabel;
   }
 
-  async removeLabel(cardId: string, labelId: string, userId: string, userRole?: string) {
+  async removeLabel(
+    cardId: string,
+    labelId: string,
+    userId: string,
+    userRole?: string,
+  ) {
     // Verify user has access to the card
     const card = await this.findOne(cardId, userId);
 
     // Restrict viewers
     const member = card.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot modify labels');
+      throw new ForbiddenException("Viewers cannot modify labels");
     }
 
     const deleted = await this.prisma.cardLabel.delete({
@@ -803,7 +922,7 @@ export class CardsService {
 
     // Emit real-time event
     this.ws.notifyCardUpdated(card.list.boardId, { id: cardId });
-    
+
     return deleted;
   }
 
@@ -812,22 +931,27 @@ export class CardsService {
     await this.findOne(cardId, userId);
     return this.prisma.checklistItem.findMany({
       where: { cardId },
-      orderBy: { position: 'asc' },
+      orderBy: { position: "asc" },
     });
   }
 
-  async addChecklistItem(cardId: string, text: string, userId: string, userRole?: string) {
+  async addChecklistItem(
+    cardId: string,
+    text: string,
+    userId: string,
+    userRole?: string,
+  ) {
     const card = await this.findOne(cardId, userId);
 
     // Restrict viewers
     const member = card.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot modify checklist');
+      throw new ForbiddenException("Viewers cannot modify checklist");
     }
 
     const last = await this.prisma.checklistItem.findFirst({
       where: { cardId },
-      orderBy: { position: 'desc' },
+      orderBy: { position: "desc" },
     });
     const position = last ? last.position + 1000 : 1000;
 
@@ -835,24 +959,35 @@ export class CardsService {
       data: { cardId, text, position },
     });
 
-    const items = await this.prisma.checklistItem.findMany({ where: { cardId }, orderBy: { position: 'asc' } });
-    this.ws.notifyCardUpdated(card.list.boardId, { id: cardId, checklistItems: items });
+    const items = await this.prisma.checklistItem.findMany({
+      where: { cardId },
+      orderBy: { position: "asc" },
+    });
+    this.ws.notifyCardUpdated(card.list.boardId, {
+      id: cardId,
+      checklistItems: items,
+    });
     return item;
   }
 
-  async updateChecklistItem(itemId: string, data: { text?: string; isCompleted?: boolean }, userId: string, userRole?: string) {
+  async updateChecklistItem(
+    itemId: string,
+    data: { text?: string; isCompleted?: boolean },
+    userId: string,
+    userRole?: string,
+  ) {
     const item = await this.prisma.checklistItem.findUnique({
       where: { id: itemId },
       include: {
         card: { include: { list: true } },
       },
     });
-    if (!item) throw new NotFoundException('Checklist item not found');
+    if (!item) throw new NotFoundException("Checklist item not found");
 
     const cardInfo = await this.findOne(item.cardId, userId);
     const member = cardInfo.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot modify checklist');
+      throw new ForbiddenException("Viewers cannot modify checklist");
     }
 
     const updated = await this.prisma.checklistItem.update({
@@ -860,8 +995,14 @@ export class CardsService {
       data,
     });
 
-    const items = await this.prisma.checklistItem.findMany({ where: { cardId: item.cardId }, orderBy: { position: 'asc' } });
-    this.ws.notifyCardUpdated(item.card.list.boardId, { id: item.cardId, checklistItems: items });
+    const items = await this.prisma.checklistItem.findMany({
+      where: { cardId: item.cardId },
+      orderBy: { position: "asc" },
+    });
+    this.ws.notifyCardUpdated(item.card.list.boardId, {
+      id: item.cardId,
+      checklistItems: items,
+    });
     return updated;
   }
 
@@ -870,18 +1011,26 @@ export class CardsService {
       where: { id: itemId },
       include: { card: { include: { list: true } } },
     });
-    if (!item) throw new NotFoundException('Checklist item not found');
+    if (!item) throw new NotFoundException("Checklist item not found");
 
     const cardInfo = await this.findOne(item.cardId, userId);
     const member = cardInfo.list.board.members.find((m) => m.userId === userId);
     if (member && member.role === BoardMemberRole.VIEWER) {
-      throw new ForbiddenException('Viewers cannot modify checklist');
+      throw new ForbiddenException("Viewers cannot modify checklist");
     }
 
-    const deleted = await this.prisma.checklistItem.delete({ where: { id: itemId } });
+    const deleted = await this.prisma.checklistItem.delete({
+      where: { id: itemId },
+    });
 
-    const items = await this.prisma.checklistItem.findMany({ where: { cardId: item.cardId }, orderBy: { position: 'asc' } });
-    this.ws.notifyCardUpdated(item.card.list.boardId, { id: item.cardId, checklistItems: items });
+    const items = await this.prisma.checklistItem.findMany({
+      where: { cardId: item.cardId },
+      orderBy: { position: "asc" },
+    });
+    this.ws.notifyCardUpdated(item.card.list.boardId, {
+      id: item.cardId,
+      checklistItems: items,
+    });
     return deleted;
   }
 }

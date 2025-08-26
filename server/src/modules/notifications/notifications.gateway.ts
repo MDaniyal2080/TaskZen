@@ -6,21 +6,23 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
+import { Logger } from "@nestjs/common";
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
     credentials: true,
   },
 })
-export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class NotificationsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
-  private logger: Logger = new Logger('NotificationsGateway');
+  private logger: Logger = new Logger("NotificationsGateway");
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
@@ -30,7 +32,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
-  @SubscribeMessage('join-board')
+  @SubscribeMessage("join-board")
   handleJoinBoard(
     @MessageBody() data: { boardId: string },
     @ConnectedSocket() client: Socket,
@@ -39,7 +41,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.logger.log(`Client ${client.id} joined board ${data.boardId}`);
   }
 
-  @SubscribeMessage('leave-board')
+  @SubscribeMessage("leave-board")
   handleLeaveBoard(
     @MessageBody() data: { boardId: string },
     @ConnectedSocket() client: Socket,
@@ -55,54 +57,54 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   // Board events
   emitBoardUpdated(boardId: string, board: any) {
-    this.emitToBoardMembers(boardId, 'board-updated', board);
+    this.emitToBoardMembers(boardId, "board-updated", board);
   }
 
   emitBoardDeleted(boardId: string) {
-    this.emitToBoardMembers(boardId, 'board-deleted', { boardId });
+    this.emitToBoardMembers(boardId, "board-deleted", { boardId });
   }
 
   // List events
   emitListCreated(boardId: string, list: any) {
-    this.emitToBoardMembers(boardId, 'list-created', list);
+    this.emitToBoardMembers(boardId, "list-created", list);
   }
 
   emitListUpdated(boardId: string, list: any) {
-    this.emitToBoardMembers(boardId, 'list-updated', list);
+    this.emitToBoardMembers(boardId, "list-updated", list);
   }
 
   emitListDeleted(boardId: string, listId: string) {
-    this.emitToBoardMembers(boardId, 'list-deleted', { listId });
+    this.emitToBoardMembers(boardId, "list-deleted", { listId });
   }
 
   // Card events
   emitCardCreated(boardId: string, card: any) {
-    this.emitToBoardMembers(boardId, 'card-created', card);
+    this.emitToBoardMembers(boardId, "card-created", card);
   }
 
   emitCardUpdated(boardId: string, card: any) {
-    this.emitToBoardMembers(boardId, 'card-updated', card);
+    this.emitToBoardMembers(boardId, "card-updated", card);
   }
 
   emitCardMoved(boardId: string, card: any) {
-    this.emitToBoardMembers(boardId, 'card-moved', card);
+    this.emitToBoardMembers(boardId, "card-moved", card);
   }
 
   emitCardDeleted(boardId: string, cardId: string) {
-    this.emitToBoardMembers(boardId, 'card-deleted', { cardId });
+    this.emitToBoardMembers(boardId, "card-deleted", { cardId });
   }
 
   // Comment events
   emitCommentAdded(boardId: string, comment: any) {
-    this.emitToBoardMembers(boardId, 'comment-added', comment);
+    this.emitToBoardMembers(boardId, "comment-added", comment);
   }
 
   // Member events
   emitMemberAdded(boardId: string, member: any) {
-    this.emitToBoardMembers(boardId, 'member-added', member);
+    this.emitToBoardMembers(boardId, "member-added", member);
   }
 
   emitMemberRemoved(boardId: string, memberId: string) {
-    this.emitToBoardMembers(boardId, 'member-removed', { memberId });
+    this.emitToBoardMembers(boardId, "member-removed", { memberId });
   }
 }

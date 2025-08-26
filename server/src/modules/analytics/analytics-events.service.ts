@@ -1,10 +1,19 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { v4 as uuidv4 } from 'uuid';
-import type { AnalyticsEventType, FeatureKey } from './types';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
+import { v4 as uuidv4 } from "uuid";
+import type {
+  AnalyticsEventType as AnalyticsEventTypeStr,
+  FeatureKey as FeatureKeyStr,
+} from "./types";
+import {
+  AnalyticsEventType as PrismaAnalyticsEventType,
+  FeatureKey as PrismaFeatureKey,
+  Prisma,
+} from "@prisma/client";
+import type { IncomingHttpHeaders } from "http";
 
 interface RequestLike {
-  headers?: Record<string, any>;
+  headers?: IncomingHttpHeaders;
 }
 
 @Injectable()
@@ -12,13 +21,15 @@ export class AnalyticsEventsService {
   constructor(private readonly prisma: PrismaService) {}
 
   private getClientInfo(req?: RequestLike) {
-    const ua = (req?.headers?.['user-agent'] as string) || undefined;
-    const device = (req?.headers?.['x-device'] as string) || undefined;
-    const os = (req?.headers?.['x-os'] as string) || undefined;
-    const country =
-      (req?.headers?.['x-country'] as string) ||
-      (req?.headers?.['cf-ipcountry'] as string) ||
-      undefined;
+    const uaH = req?.headers?.["user-agent"];
+    const devH = req?.headers?.["x-device"];
+    const osH = req?.headers?.["x-os"];
+    const countryH =
+      req?.headers?.["x-country"] ?? req?.headers?.["cf-ipcountry"];
+    const ua = Array.isArray(uaH) ? uaH[0] : uaH;
+    const device = Array.isArray(devH) ? devH[0] : devH;
+    const os = Array.isArray(osH) ? osH[0] : osH;
+    const country = Array.isArray(countryH) ? countryH[0] : countryH;
     return { browser: ua, device, os, country };
   }
 
@@ -32,14 +43,14 @@ export class AnalyticsEventsService {
       country?: string;
       page?: string;
       referrer?: string;
-      metadata?: any;
+      metadata?: Record<string, unknown>;
     },
     req?: RequestLike,
   ) {
     const sessionId = dto.sessionId || uuidv4();
     const client = this.getClientInfo(req);
 
-    const created = await (this.prisma as any).userSession.create({
+    const created = await this.prisma.userSession.create({
       data: {
         sessionId,
         userId,
@@ -50,9 +61,9 @@ export class AnalyticsEventsService {
       },
     });
 
-    await (this.prisma as any).analyticsEvent.create({
+    await this.prisma.analyticsEvent.create({
       data: {
-        type: 'SESSION_START' as any,
+        type: PrismaAnalyticsEventType.SESSION_START,
         sessionId,
         userId,
         page: dto.page,
@@ -61,7 +72,7 @@ export class AnalyticsEventsService {
         browser: dto.browser ?? client.browser,
         os: dto.os ?? client.os,
         country: dto.country ?? client.country,
-        metadata: dto.metadata ?? undefined,
+        metadata: (dto.metadata ?? undefined) as Prisma.InputJsonValue,
       },
     });
 
@@ -70,20 +81,20 @@ export class AnalyticsEventsService {
 
   async endSession(
     userId: string,
-    dto: { sessionId: string; metadata?: any },
+    dto: { sessionId: string; metadata?: Record<string, unknown> },
   ) {
-    const session = await (this.prisma as any).userSession.findUnique({
+    const session = await this.prisma.userSession.findUnique({
       where: { sessionId: dto.sessionId },
     });
 
     if (!session) {
       // Create an end event even if we can't find session row
-      await (this.prisma as any).analyticsEvent.create({
+      await this.prisma.analyticsEvent.create({
         data: {
-          type: 'SESSION_END' as any,
+          type: PrismaAnalyticsEventType.SESSION_END,
           sessionId: dto.sessionId,
           userId,
-          metadata: dto.metadata ?? undefined,
+          metadata: (dto.metadata ?? undefined) as Prisma.InputJsonValue,
         },
       });
       return { sessionId: dto.sessionId, ended: true, durationSec: null };
@@ -95,17 +106,17 @@ export class AnalyticsEventsService {
       Math.floor((now.getTime() - session.startedAt.getTime()) / 1000),
     );
 
-    const updated = await (this.prisma as any).userSession.update({
+    const updated = await this.prisma.userSession.update({
       where: { sessionId: dto.sessionId },
       data: { endedAt: now, durationSec },
     });
 
-    await (this.prisma as any).analyticsEvent.create({
+    await this.prisma.analyticsEvent.create({
       data: {
-        type: 'SESSION_END' as any,
+        type: PrismaAnalyticsEventType.SESSION_END,
         sessionId: dto.sessionId,
         userId,
-        metadata: dto.metadata ?? undefined,
+        metadata: (dto.metadata ?? undefined) as Prisma.InputJsonValue,
       },
     });
 
@@ -119,8 +130,8 @@ export class AnalyticsEventsService {
   async recordEvent(
     userId: string,
     dto: {
-      type: AnalyticsEventType;
-      feature?: FeatureKey;
+      type: AnalyticsEventTypeStr;
+      feature?: FeatureKeyStr;
       page?: string;
       referrer?: string;
       sessionId?: string;
@@ -130,7 +141,7 @@ export class AnalyticsEventsService {
       country?: string;
       boardId?: string;
       cardId?: string;
-      metadata?: any;
+      metadata?: Record<string, unknown>;
     },
     req?: RequestLike,
   ) {
@@ -138,7 +149,7 @@ export class AnalyticsEventsService {
     let boardId: string | undefined = dto.boardId;
     let cardId: string | undefined = dto.cardId;
 
-    const checks: Promise<any>[] = [];
+    const checks: Promise<void>[] = [];
     if (dto.boardId) {
       checks.push(
         this.prisma.board
@@ -150,21 +161,19 @@ export class AnalyticsEventsService {
     }
     if (dto.cardId) {
       checks.push(
-        this.prisma.card
-          .findUnique({ where: { id: dto.cardId } })
-          .then((c) => {
-            if (!c) cardId = undefined;
-          }),
+        this.prisma.card.findUnique({ where: { id: dto.cardId } }).then((c) => {
+          if (!c) cardId = undefined;
+        }),
       );
     }
     if (checks.length) await Promise.all(checks);
 
     const client = this.getClientInfo(req);
 
-    const event = await (this.prisma as any).analyticsEvent.create({
+    const event = await this.prisma.analyticsEvent.create({
       data: {
-        type: dto.type as any,
-        feature: dto.feature as any,
+        type: dto.type as PrismaAnalyticsEventType,
+        feature: (dto.feature as PrismaFeatureKey) ?? undefined,
         page: dto.page,
         referrer: dto.referrer,
         sessionId: dto.sessionId,
@@ -175,7 +184,7 @@ export class AnalyticsEventsService {
         userId,
         boardId,
         cardId,
-        metadata: dto.metadata ?? undefined,
+        metadata: (dto.metadata ?? undefined) as Prisma.InputJsonValue,
       },
     });
 

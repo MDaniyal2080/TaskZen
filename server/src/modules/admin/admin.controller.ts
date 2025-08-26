@@ -5,25 +5,36 @@ import {
   Delete,
   Param,
   UseGuards,
-  Request,
   Query,
   Res,
   Post,
   Body,
   Put,
-} from '@nestjs/common';
-import { AdminService } from './admin.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { Response } from 'express';
-import { AnalyticsService } from './analytics.service';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiOkResponse, ApiQuery } from '@nestjs/swagger';
-import { RevenueMetricsDto, RevenueTransactionsResponseDto } from './dto/revenue.dto';
+  Req,
+} from "@nestjs/common";
+import { AdminService } from "./admin.service";
+import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { Response } from "express";
+import { AnalyticsService } from "./analytics.service";
+import type { RequestWithUser } from "@/common/types/request-with-user";
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiOkResponse,
+  ApiQuery,
+} from "@nestjs/swagger";
+import {
+  RevenueMetricsDto,
+  RevenueTransactionsResponseDto,
+} from "./dto/revenue.dto";
+import type { SystemSettingsShape } from "../../common/services/system-settings.service";
 
-@ApiTags('Admin')
+@ApiTags("Admin")
 @ApiBearerAuth()
-@Controller('admin')
+@Controller("admin")
 @UseGuards(JwtAuthGuard)
 export class AdminController {
   constructor(
@@ -31,120 +42,159 @@ export class AdminController {
     private readonly analyticsService: AnalyticsService,
   ) {}
 
-  @Get('dashboard')
-  getDashboardStats(@Request() req) {
+  @Get("dashboard")
+  getDashboardStats(@Req() req: RequestWithUser) {
     return this.adminService.getDashboardStats(req.user.role);
   }
 
-  @Get('users')
-  getAllUsers(@Request() req) {
+  @Get("users")
+  getAllUsers(@Req() req: RequestWithUser) {
     return this.adminService.getAllUsers(req.user.role);
   }
 
-  @Get('boards')
-  getAllBoards(@Request() req) {
+  @Get("boards")
+  getAllBoards(@Req() req: RequestWithUser) {
     return this.adminService.getAllBoards(req.user.role);
   }
 
-  @Patch('users/:id/deactivate')
-  deactivateUser(@Param('id') id: string, @Request() req) {
+  @Patch("users/:id/deactivate")
+  deactivateUser(@Param("id") id: string, @Req() req: RequestWithUser) {
     return this.adminService.deactivateUser(id, req.user.role);
   }
 
-  @Patch('users/:id/activate')
-  activateUser(@Param('id') id: string, @Request() req) {
+  @Patch("users/:id/activate")
+  activateUser(@Param("id") id: string, @Req() req: RequestWithUser) {
     return this.adminService.activateUser(id, req.user.role);
   }
 
-  @Patch('users/:id/upgrade')
-  upgradeUserToPro(@Param('id') id: string, @Request() req) {
+  @Patch("users/:id/upgrade")
+  upgradeUserToPro(@Param("id") id: string, @Req() req: RequestWithUser) {
     return this.adminService.upgradeUserToPro(id, req.user.role);
   }
 
-  @Patch('users/:id/make-admin')
-  makeUserAdmin(@Param('id') id: string, @Request() req) {
+  @Patch("users/:id/make-admin")
+  makeUserAdmin(@Param("id") id: string, @Req() req: RequestWithUser) {
     return this.adminService.makeUserAdmin(id, req.user.role);
   }
 
-  @Patch('users/:id/remove-admin')
-  removeAdminRole(@Param('id') id: string, @Request() req) {
+  @Patch("users/:id/remove-admin")
+  removeAdminRole(@Param("id") id: string, @Req() req: RequestWithUser) {
     return this.adminService.removeAdminRole(id, req.user.role);
   }
 
-  @Patch('users/:id/subscription')
+  @Patch("users/:id/subscription")
   updateUserSubscription(
-    @Param('id') id: string,
-    @Body() payload: { type: 'FREE' | 'PRO' | 'ENTERPRISE'; billingCycle?: 'MONTHLY' | 'YEARLY'; status?: 'ACTIVE' | 'CANCELLED' | 'EXPIRED' },
-    @Request() req,
+    @Param("id") id: string,
+    @Body()
+    payload: {
+      type: "FREE" | "PRO" | "ENTERPRISE";
+      billingCycle?: "MONTHLY" | "YEARLY";
+      status?: "ACTIVE" | "CANCELLED" | "EXPIRED";
+    },
+    @Req() req: RequestWithUser,
   ) {
     return this.adminService.updateUserSubscription(id, req.user.role, payload);
   }
 
-  @Delete('users/:id')
-  deleteUser(@Param('id') id: string, @Request() req) {
+  @Delete("users/:id")
+  deleteUser(@Param("id") id: string, @Req() req: RequestWithUser) {
     return this.adminService.deleteUser(id, req.user.role);
   }
 
-  @Delete('boards/:id')
-  deleteBoard(@Param('id') id: string, @Request() req) {
+  @Delete("boards/:id")
+  deleteBoard(@Param("id") id: string, @Req() req: RequestWithUser) {
     return this.adminService.deleteBoard(id, req.user.role);
   }
 
-  @Get('analytics')
-  async getAnalytics(@Request() req, @Query('timeRange') timeRange?: string) {
+  @Get("analytics")
+  async getAnalytics(
+    @Req() req: RequestWithUser,
+    @Query("timeRange") timeRange?: string,
+  ) {
     return this.adminService.getAnalytics(req.user.role, timeRange);
   }
 
-  @Get('analytics/export')
+  @Get("analytics/export")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles("ADMIN")
   async exportAnalytics(
-    @Query('format') format: 'csv' | 'pdf' = 'csv',
-    @Request() req,
+    @Query("format") format: "csv" | "pdf" = "csv",
+    @Req() req: RequestWithUser,
     @Res() res: Response,
   ) {
     const data = await this.adminService.exportAnalytics(req.user.role, format);
-    
-    if (format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename=taskzen-analytics-${Date.now()}.csv`);
+
+    if (format === "csv") {
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=taskzen-analytics-${Date.now()}.csv`,
+      );
       res.send(data);
     } else {
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=taskzen-analytics-${Date.now()}.pdf`);
-      res.setHeader('Content-Length', (data as Buffer).length.toString());
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=taskzen-analytics-${Date.now()}.pdf`,
+      );
+      res.setHeader("Content-Length", (data as Buffer).length.toString());
       res.end(data);
     }
   }
 
   // Revenue Endpoints
-  @Get('revenue')
+  @Get("revenue")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Get revenue metrics (estimated from Pro users)' })
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Get revenue metrics (estimated from Pro users)" })
   @ApiOkResponse({ type: RevenueMetricsDto })
-  async getRevenue(@Request() _req) {
+  async getRevenue() {
     // Uses AnalyticsService to compute revenue metrics estimated from Pro users
     return this.analyticsService.getRevenueMetrics();
   }
 
-  @Get('revenue/transactions')
+  @Get("revenue/transactions")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Get revenue transactions' })
+  @Roles("ADMIN")
+  @ApiOperation({ summary: "Get revenue transactions" })
   @ApiOkResponse({ type: RevenueTransactionsResponseDto })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of transactions to return' })
-  @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Offset for pagination' })
-  @ApiQuery({ name: 'status', required: false, type: String, description: 'Filter by transaction status' })
-  @ApiQuery({ name: 'plan', required: false, type: String, description: 'Filter by plan type' })
-  @ApiQuery({ name: 'q', required: false, type: String, description: 'Search query for transactions' })
+  @ApiQuery({
+    name: "limit",
+    required: false,
+    type: Number,
+    description: "Number of transactions to return",
+  })
+  @ApiQuery({
+    name: "offset",
+    required: false,
+    type: Number,
+    description: "Offset for pagination",
+  })
+  @ApiQuery({
+    name: "status",
+    required: false,
+    type: String,
+    description: "Filter by transaction status",
+  })
+  @ApiQuery({
+    name: "plan",
+    required: false,
+    type: String,
+    description: "Filter by plan type",
+  })
+  @ApiQuery({
+    name: "q",
+    required: false,
+    type: String,
+    description: "Search query for transactions",
+  })
   async getRevenueTransactions(
-    @Request() req,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-    @Query('status') status?: string,
-    @Query('plan') plan?: string,
-    @Query('q') q?: string,
+    @Req() req: RequestWithUser,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+    @Query("status") status?: string,
+    @Query("plan") plan?: string,
+    @Query("q") q?: string,
   ) {
     const lim = Math.min(Math.max(Number(limit) || 25, 1), 100);
     const off = Math.max(Number(offset) || 0, 0);
@@ -157,103 +207,128 @@ export class AdminController {
     });
   }
 
-  @Get('revenue/transactions/export')
+  @Get("revenue/transactions/export")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Export revenue transactions as CSV (honors filters)' })
-  @ApiQuery({ name: 'status', required: false, type: String, description: 'Filter by transaction status' })
-  @ApiQuery({ name: 'plan', required: false, type: String, description: 'Filter by plan type' })
-  @ApiQuery({ name: 'q', required: false, type: String, description: 'Search query for transactions' })
+  @Roles("ADMIN")
+  @ApiOperation({
+    summary: "Export revenue transactions as CSV (honors filters)",
+  })
+  @ApiQuery({
+    name: "status",
+    required: false,
+    type: String,
+    description: "Filter by transaction status",
+  })
+  @ApiQuery({
+    name: "plan",
+    required: false,
+    type: String,
+    description: "Filter by plan type",
+  })
+  @ApiQuery({
+    name: "q",
+    required: false,
+    type: String,
+    description: "Search query for transactions",
+  })
   async exportRevenueTransactionsCsv(
-    @Request() req,
-    @Query('status') status: string | undefined,
-    @Query('plan') plan: string | undefined,
-    @Query('q') q: string | undefined,
+    @Req() req: RequestWithUser,
+    @Query("status") status: string | undefined,
+    @Query("plan") plan: string | undefined,
+    @Query("q") q: string | undefined,
     @Res() res: Response,
   ) {
-    const csv = await this.adminService.exportRevenueTransactionsCsv(req.user.role, { status, plan, q });
-    const date = new Date().toISOString().split('T')[0];
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=taskzen-transactions-${date}.csv`);
+    const csv = await this.adminService.exportRevenueTransactionsCsv(
+      req.user.role,
+      { status, plan, q },
+    );
+    const date = new Date().toISOString().split("T")[0];
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=taskzen-transactions-${date}.csv`,
+    );
     res.send(csv);
   }
 
   // System Health
-  @Get('health')
+  @Get("health")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  async getSystemHealth(@Request() req) {
+  @Roles("ADMIN")
+  async getSystemHealth(@Req() req: RequestWithUser) {
     return this.adminService.getSystemHealth(req.user.role);
   }
 
   // Recent Activities
-  @Get('activities')
+  @Get("activities")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles("ADMIN")
   async getRecentActivities(
-    @Request() req,
-    @Query('limit') limit?: string,
+    @Req() req: RequestWithUser,
+    @Query("limit") limit?: string,
   ) {
     const lim = Number(limit) || 10;
     return this.adminService.getRecentActivities(req.user.role, lim);
   }
 
   // Content Moderation Endpoints
-  @Get('moderation/flagged')
+  @Get("moderation/flagged")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  async getFlaggedContent(
-    @Query('status') status?: string,
-  ) {
+  @Roles("ADMIN")
+  async getFlaggedContent(@Query("status") status?: string) {
     return this.adminService.getFlaggedContent(status);
   }
 
-  @Get('moderation/users')
+  @Get("moderation/users")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles("ADMIN")
   async getModeratedUsers() {
     return this.adminService.getModeratedUsers();
   }
 
-  @Post('moderation/review/:contentId')
+  @Post("moderation/review/:contentId")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles("ADMIN")
   async reviewContent(
-    @Param('contentId') contentId: string,
-    @Body() reviewData: { action: 'approve' | 'remove' | 'dismiss' },
-    @Request() req,
+    @Param("contentId") contentId: string,
+    @Body() reviewData: { action: "approve" | "remove" | "dismiss" },
+    @Req() req: RequestWithUser,
   ) {
-    return this.adminService.reviewContent(contentId, reviewData.action, req.user.id);
+    return this.adminService.reviewContent(
+      contentId,
+      reviewData.action,
+      req.user.id,
+    );
   }
 
-  @Post('moderation/user/:userId')
+  @Post("moderation/user/:userId")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles("ADMIN")
   async moderateUser(
-    @Param('userId') userId: string,
-    @Body() actionData: { action: 'warn' | 'suspend' | 'ban' | 'activate' },
+    @Param("userId") userId: string,
+    @Body() actionData: { action: "warn" | "suspend" | "ban" | "activate" },
   ) {
     return this.adminService.moderateUser(userId, actionData.action);
   }
 
   // System Settings Endpoints
-  @Get('settings')
+  @Get("settings")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles("ADMIN")
   async getSettings() {
     return this.adminService.getSystemSettings();
   }
 
-  @Put('settings')
+  @Put("settings")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  async updateSettings(@Body() settings: any) {
+  @Roles("ADMIN")
+  async updateSettings(@Body() settings: Partial<SystemSettingsShape>) {
     return this.adminService.updateSystemSettings(settings);
   }
 
-  @Post('maintenance')
+  @Post("maintenance")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
+  @Roles("ADMIN")
   async toggleMaintenance(@Body() data: { enabled: boolean }) {
     return this.adminService.toggleMaintenanceMode(data.enabled);
   }

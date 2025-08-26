@@ -5,8 +5,10 @@ import {
   HttpException,
   HttpStatus,
   Logger,
-} from '@nestjs/common';
-import { Request, Response } from 'express';
+} from "@nestjs/common";
+import { Request, Response } from "express";
+
+type AuthenticatedRequest = Request & { user?: { id?: string } };
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -16,28 +18,31 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
+    const authReq = request as AuthenticatedRequest;
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
-    let error = 'Internal Server Error';
-    let details = undefined;
+    let message = "Internal server error";
+    let error = "Internal Server Error";
+    let details: unknown = undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      
-      if (typeof exceptionResponse === 'object') {
-        const responseObj = exceptionResponse as any;
-        message = responseObj.message || exception.message;
-        error = responseObj.error || 'Error';
-        details = responseObj.details;
+
+      if (typeof exceptionResponse === "object" && exceptionResponse !== null) {
+        const r = exceptionResponse as Record<string, unknown>;
+        const msgField = r["message"];
+        const errField = r["error"];
+        message = typeof msgField === "string" ? msgField : exception.message;
+        error = typeof errField === "string" ? errField : "Error";
+        details = r["details"];
       } else {
         message = exceptionResponse as string;
       }
     } else if (exception instanceof Error) {
       message = exception.message;
       error = exception.name;
-      
+
       // Log full error details for debugging
       this.logger.error(
         `Unhandled exception: ${exception.message}`,
@@ -46,14 +51,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           url: request.url,
           method: request.method,
           ip: request.ip,
-          user: (request as any).user?.id,
+          user: authReq.user?.id,
         },
       );
     }
 
     // Don't expose internal error details in production
-    if (process.env.NODE_ENV === 'production' && status === HttpStatus.INTERNAL_SERVER_ERROR) {
-      message = 'An unexpected error occurred';
+    if (
+      process.env.NODE_ENV === "production" &&
+      status === HttpStatus.INTERNAL_SERVER_ERROR
+    ) {
+      message = "An unexpected error occurred";
       details = undefined;
     }
 
@@ -65,7 +73,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error,
       message,
       ...(details && { details }),
-      ...(process.env.NODE_ENV !== 'production' && {
+      ...(process.env.NODE_ENV !== "production" && {
         stack: exception instanceof Error ? exception.stack : undefined,
       }),
     };
@@ -76,8 +84,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       {
         ...errorResponse,
         ip: request.ip,
-        userAgent: request.get('user-agent'),
-        user: (request as any).user?.id,
+        userAgent: request.get("user-agent"),
+        user: authReq.user?.id,
       },
     );
 

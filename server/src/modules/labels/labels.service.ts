@@ -1,11 +1,19 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
 
 @Injectable()
 export class LabelsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: { name: string; color: string; boardId: string }, userId: string) {
+  async create(
+    data: { name: string; color: string; boardId: string },
+    userId: string,
+  ) {
     // Verify board exists and user has access
     const board = await this.prisma.board.findUnique({
       where: { id: data.boardId },
@@ -13,16 +21,18 @@ export class LabelsService {
     });
 
     if (!board) {
-      throw new NotFoundException('Board not found');
+      throw new NotFoundException("Board not found");
     }
 
     // Check if user is owner or admin member
     const isOwner = board.ownerId === userId;
-    const member = board.members.find(m => m.userId === userId);
-    const canCreate = isOwner || member?.role === 'ADMIN';
+    const member = board.members.find((m) => m.userId === userId);
+    const canCreate = isOwner || member?.role === "ADMIN";
 
     if (!canCreate) {
-      throw new ForbiddenException('Only board owner and admins can create labels');
+      throw new ForbiddenException(
+        "Only board owner and admins can create labels",
+      );
     }
 
     // Check if label with same name already exists
@@ -34,7 +44,7 @@ export class LabelsService {
     });
 
     if (existingLabel) {
-      throw new BadRequestException('Label with this name already exists');
+      throw new BadRequestException("Label with this name already exists");
     }
 
     return this.prisma.label.create({
@@ -49,7 +59,7 @@ export class LabelsService {
   async findByBoard(boardId: string) {
     return this.prisma.label.findMany({
       where: { boardId },
-      orderBy: { name: 'asc' },
+      orderBy: { name: "asc" },
     });
   }
 
@@ -66,10 +76,10 @@ export class LabelsService {
     });
 
     if (!card) {
-      throw new NotFoundException('Card not found');
+      throw new NotFoundException("Card not found");
     }
 
-    return card.labels.map(cl => cl.label);
+    return card.labels.map((cl) => cl.label);
   }
 
   async addToCard(cardId: string, labelId: string, userId: string) {
@@ -88,7 +98,7 @@ export class LabelsService {
     });
 
     if (!card) {
-      throw new NotFoundException('Card not found');
+      throw new NotFoundException("Card not found");
     }
 
     const label = await this.prisma.label.findUnique({
@@ -96,21 +106,23 @@ export class LabelsService {
     });
 
     if (!label) {
-      throw new NotFoundException('Label not found');
+      throw new NotFoundException("Label not found");
     }
 
     // Verify label belongs to the same board
     if (label.boardId !== card.list.board.id) {
-      throw new BadRequestException('Label does not belong to this board');
+      throw new BadRequestException("Label does not belong to this board");
     }
 
     // Check user has access to modify card
-    const hasAccess = 
+    const hasAccess =
       card.list.board.ownerId === userId ||
-      card.list.board.members.some(m => m.userId === userId && m.role !== 'VIEWER');
+      card.list.board.members.some(
+        (m) => m.userId === userId && m.role !== "VIEWER",
+      );
 
     if (!hasAccess) {
-      throw new ForbiddenException('No permission to modify this card');
+      throw new ForbiddenException("No permission to modify this card");
     }
 
     // Check if label is already assigned
@@ -140,12 +152,12 @@ export class LabelsService {
     // Create activity log
     await this.prisma.activity.create({
       data: {
-        type: 'CARD_UPDATED',
+        type: "CARD_UPDATED",
         userId,
         cardId,
         boardId: card.list.board.id,
         data: {
-          action: 'label_added',
+          action: "label_added",
           labelName: label.name,
           cardTitle: card.title,
         },
@@ -171,7 +183,7 @@ export class LabelsService {
     });
 
     if (!card) {
-      throw new NotFoundException('Card not found');
+      throw new NotFoundException("Card not found");
     }
 
     const label = await this.prisma.label.findUnique({
@@ -179,16 +191,18 @@ export class LabelsService {
     });
 
     if (!label) {
-      throw new NotFoundException('Label not found');
+      throw new NotFoundException("Label not found");
     }
 
     // Check user has access to modify card
-    const hasAccess = 
+    const hasAccess =
       card.list.board.ownerId === userId ||
-      card.list.board.members.some(m => m.userId === userId && m.role !== 'VIEWER');
+      card.list.board.members.some(
+        (m) => m.userId === userId && m.role !== "VIEWER",
+      );
 
     if (!hasAccess) {
-      throw new ForbiddenException('No permission to modify this card');
+      throw new ForbiddenException("No permission to modify this card");
     }
 
     const deleted = await this.prisma.cardLabel.delete({
@@ -203,12 +217,12 @@ export class LabelsService {
     // Create activity log
     await this.prisma.activity.create({
       data: {
-        type: 'CARD_UPDATED',
+        type: "CARD_UPDATED",
         userId,
         cardId,
         boardId: card.list.board.id,
         data: {
-          action: 'label_removed',
+          action: "label_removed",
           labelName: label.name,
           cardTitle: card.title,
         },
@@ -218,7 +232,11 @@ export class LabelsService {
     return deleted;
   }
 
-  async update(id: string, data: { name?: string; color?: string }, userId: string) {
+  async update(
+    id: string,
+    data: { name?: string; color?: string },
+    userId: string,
+  ) {
     const label = await this.prisma.label.findUnique({
       where: { id },
       include: {
@@ -229,16 +247,18 @@ export class LabelsService {
     });
 
     if (!label) {
-      throw new NotFoundException('Label not found');
+      throw new NotFoundException("Label not found");
     }
 
     // Check if user is owner or admin member
     const isOwner = label.board.ownerId === userId;
-    const member = label.board.members.find(m => m.userId === userId);
-    const canUpdate = isOwner || member?.role === 'ADMIN';
+    const member = label.board.members.find((m) => m.userId === userId);
+    const canUpdate = isOwner || member?.role === "ADMIN";
 
     if (!canUpdate) {
-      throw new ForbiddenException('Only board owner and admins can update labels');
+      throw new ForbiddenException(
+        "Only board owner and admins can update labels",
+      );
     }
 
     // Check if new name conflicts with existing label
@@ -252,7 +272,7 @@ export class LabelsService {
       });
 
       if (existing) {
-        throw new BadRequestException('Label with this name already exists');
+        throw new BadRequestException("Label with this name already exists");
       }
     }
 
@@ -276,16 +296,18 @@ export class LabelsService {
     });
 
     if (!label) {
-      throw new NotFoundException('Label not found');
+      throw new NotFoundException("Label not found");
     }
 
     // Check if user is owner or admin member
     const isOwner = label.board.ownerId === userId;
-    const member = label.board.members.find(m => m.userId === userId);
-    const canDelete = isOwner || member?.role === 'ADMIN';
+    const member = label.board.members.find((m) => m.userId === userId);
+    const canDelete = isOwner || member?.role === "ADMIN";
 
     if (!canDelete) {
-      throw new ForbiddenException('Only board owner and admins can delete labels');
+      throw new ForbiddenException(
+        "Only board owner and admins can delete labels",
+      );
     }
 
     // Delete all card-label associations first

@@ -1,15 +1,18 @@
-import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
+import { Injectable, NestMiddleware, Logger } from "@nestjs/common";
+import { Request, Response, NextFunction } from "express";
+
+type AuthenticatedRequest = Request & { user?: { id?: string } };
 
 @Injectable()
 export class RequestLoggerMiddleware implements NestMiddleware {
-  private logger = new Logger('HTTP');
+  private logger = new Logger("HTTP");
 
   use(req: Request, res: Response, next: NextFunction) {
     const startTime = Date.now();
     const { method, originalUrl, ip } = req;
-    const userAgent = req.get('user-agent') || '';
-    const userId = (req as any).user?.id || 'anonymous';
+    const userAgent = req.get("user-agent") || "";
+    const authReq = req as AuthenticatedRequest;
+    const userId = authReq.user?.id || "anonymous";
     let finished = false;
 
     // Log request
@@ -18,14 +21,14 @@ export class RequestLoggerMiddleware implements NestMiddleware {
     );
 
     // Log response
-    res.on('finish', () => {
+    res.on("finish", () => {
       finished = true;
       const { statusCode } = res;
       const responseTime = Date.now() - startTime;
-      const contentLength = res.get('content-length');
+      const contentLength = res.get("content-length");
 
-      const logLevel = statusCode >= 500 ? 'error' : 
-                       statusCode >= 400 ? 'warn' : 'log';
+      const logLevel =
+        statusCode >= 500 ? "error" : statusCode >= 400 ? "warn" : "log";
 
       this.logger[logLevel](
         `← ${method} ${originalUrl} - ${statusCode} - ${responseTime}ms - ${contentLength || 0} bytes`,
@@ -40,7 +43,7 @@ export class RequestLoggerMiddleware implements NestMiddleware {
     });
 
     // Client aborted connection before response finished
-    req.on('aborted', () => {
+    req.on("aborted", () => {
       if (!finished) {
         const responseTime = Date.now() - startTime;
         this.logger.warn(
@@ -50,7 +53,7 @@ export class RequestLoggerMiddleware implements NestMiddleware {
     });
 
     // Connection closed unexpectedly (e.g., ECONNRESET)
-    res.on('close', () => {
+    res.on("close", () => {
       if (!finished) {
         const responseTime = Date.now() - startTime;
         this.logger.error(
@@ -60,12 +63,18 @@ export class RequestLoggerMiddleware implements NestMiddleware {
     });
 
     // Response stream error
-    res.on('error', (err: any) => {
+    res.on("error", (err: unknown) => {
       const responseTime = Date.now() - startTime;
-      this.logger.error(
-        `✖ Response error on ${method} ${originalUrl} after ${responseTime}ms: ${err?.message || err}`,
-        err?.stack,
-      );
+      if (err instanceof Error) {
+        this.logger.error(
+          `✖ Response error on ${method} ${originalUrl} after ${responseTime}ms: ${err.message}`,
+          err.stack,
+        );
+      } else {
+        this.logger.error(
+          `✖ Response error on ${method} ${originalUrl} after ${responseTime}ms: ${String(err)}`,
+        );
+      }
     });
 
     next();

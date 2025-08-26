@@ -1,5 +1,12 @@
-import { IsString, IsOptional, IsBoolean, IsNumber, IsEnum, IsDateString } from 'class-validator';
-import { Priority } from '@prisma/client';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  IsEnum,
+  IsDateString,
+} from "class-validator";
+import { Priority } from "@prisma/client";
 
 export class CreateCardDto {
   @IsString()

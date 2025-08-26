@@ -1,11 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { PrismaService } from "../../database/prisma.service";
+import type { SystemSettings as DBSystemSettings } from "@prisma/client";
 
 export interface MaintenanceSettings {
   enabled: boolean;
   message?: string | null;
   scheduledAt?: string | null;
   estimatedDuration?: string | number | null;
+}
+
+export interface GeneralSettings {
+  siteName: string;
+  maxBoardsPerUser: number;
+  maxCardsPerBoard: number;
+  maxFileSize: number; // MB
 }
 
 export interface FeatureFlags {
@@ -17,6 +25,18 @@ export interface FeatureFlags {
   enableComments?: boolean;
   enablePublicBoards?: boolean;
   enableAnalytics?: boolean;
+}
+
+export interface SecuritySettings {
+  requireEmailVerification?: boolean;
+  enableTwoFactor?: boolean;
+  sessionTimeout?: number; // minutes
+  passwordMinLength?: number;
+  maxLoginAttempts?: number;
+  loginAttemptWindowSec?: number;
+  enableRateLimiting?: boolean;
+  rateLimitRequests?: number;
+  rateLimitWindow?: number; // seconds
 }
 
 export interface EmailTemplates {
@@ -48,11 +68,13 @@ export interface PaymentSettings {
 }
 
 export interface SystemSettingsShape {
+  general?: GeneralSettings;
   maintenance?: MaintenanceSettings;
   features?: FeatureFlags;
+  security?: SecuritySettings;
   email?: EmailSettings;
   payments?: PaymentSettings;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 @Injectable()
@@ -68,121 +90,138 @@ export class SystemSettingsService {
 
   async getSettings(forceRefresh = false): Promise<SystemSettingsShape> {
     const now = Date.now();
-    if (!forceRefresh && this.cache.settings && now - this.cache.fetchedAt < this.TTL_MS) {
+    if (
+      !forceRefresh &&
+      this.cache.settings &&
+      now - this.cache.fetchedAt < this.TTL_MS
+    ) {
       return this.cache.settings;
     }
 
     try {
       const timeoutMs = Number(process.env.SETTINGS_FETCH_TIMEOUT_MS || 1000);
-      const row = await Promise.race([
-        this.prisma.systemSettings.findUnique({ where: { id: 'default' } }),
-        new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error(`SystemSettings fetch timeout after ${timeoutMs}ms`)), timeoutMs),
+      const row: DBSystemSettings | null = await Promise.race([
+        this.prisma.systemSettings.findUnique({ where: { id: "default" } }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(`SystemSettings fetch timeout after ${timeoutMs}ms`),
+              ),
+            timeoutMs,
+          ),
         ),
-      ]) as any;
-      const settings: SystemSettingsShape = row?.data as any;
-      const safeDefaults: SystemSettingsShape = {
-        general: {
-          siteName: 'TaskZen',
-          maxBoardsPerUser: 3,
-          maxCardsPerBoard: 100,
-          maxFileSize: 5, // MB
-        },
-        maintenance: {
-          enabled: false,
-          message: null,
-          scheduledAt: null,
-          estimatedDuration: null,
-        },
-        features: {
-          enableRegistration: true,
-          enableGoogleAuth: false,
-          enableEmailNotifications: true,
-          enableRealTimeUpdates: true,
-          enableFileUploads: true,
-          enableComments: true,
-          enablePublicBoards: false,
-          enableAnalytics: true,
-        },
-        security: {
-          requireEmailVerification: false,
-          enableTwoFactor: false,
-          sessionTimeout: 10080, // minutes (7 days)
-          passwordMinLength: 6,
-          maxLoginAttempts: 5,
-          loginAttemptWindowSec: 900,
-          enableRateLimiting: true,
-          rateLimitRequests: 100,
-          rateLimitWindow: 60, // seconds
-        },
-        email: {
-          enabled: false,
-          provider: 'smtp',
-          fromEmail: 'noreply@taskzen.app',
-          fromName: 'TaskZen',
-          smtpHost: 'smtp.gmail.com',
-          smtpPort: 587,
-          smtpUser: '',
-          smtpPassword: '',
-          templates: {
-            welcome: true,
-            passwordReset: true,
-            emailVerification: true,
-            subscription: true,
-          },
-        },
-        payments: {
-          enabled: true,
-          provider: 'stripe',
-          currency: 'USD',
-          monthlyPrice: 9.99,
-          yearlyPrice: 99.99,
-          trialDays: 14,
+      ]);
+
+      const defaultGeneral: GeneralSettings = {
+        siteName: "TaskZen",
+        maxBoardsPerUser: 3,
+        maxCardsPerBoard: 100,
+        maxFileSize: 5,
+      };
+
+      const defaultMaintenance: MaintenanceSettings = {
+        enabled: false,
+        message: null,
+        scheduledAt: null,
+        estimatedDuration: null,
+      };
+
+      const defaultFeatures: FeatureFlags = {
+        enableRegistration: true,
+        enableGoogleAuth: false,
+        enableEmailNotifications: true,
+        enableRealTimeUpdates: true,
+        enableFileUploads: true,
+        enableComments: true,
+        enablePublicBoards: false,
+        enableAnalytics: true,
+      };
+
+      const defaultSecurity: SecuritySettings = {
+        requireEmailVerification: false,
+        enableTwoFactor: false,
+        sessionTimeout: 10080, // minutes (7 days)
+        passwordMinLength: 6,
+        maxLoginAttempts: 5,
+        loginAttemptWindowSec: 900,
+        enableRateLimiting: true,
+        rateLimitRequests: 100,
+        rateLimitWindow: 60, // seconds
+      };
+
+      const defaultEmail: EmailSettings = {
+        enabled: false,
+        provider: "smtp",
+        fromEmail: "noreply@taskzen.app",
+        fromName: "TaskZen",
+        smtpHost: "smtp.gmail.com",
+        smtpPort: 587,
+        smtpUser: "",
+        smtpPassword: "",
+        templates: {
+          welcome: true,
+          passwordReset: true,
+          emailVerification: true,
+          subscription: true,
         },
       };
 
+      const defaultPayments: PaymentSettings = {
+        enabled: true,
+        provider: "stripe",
+        currency: "USD",
+        monthlyPrice: 9.99,
+        yearlyPrice: 99.99,
+        trialDays: 14,
+      };
+
+      const settings: SystemSettingsShape =
+        (row?.data as unknown as SystemSettingsShape) ||
+        ({} as SystemSettingsShape);
+
       const mergedMaintenance: MaintenanceSettings = {
-        enabled: Boolean((settings as any)?.maintenance?.enabled ?? (safeDefaults.maintenance as MaintenanceSettings).enabled),
-        message: ((settings as any)?.maintenance?.message ?? (safeDefaults.maintenance as MaintenanceSettings).message) as any,
-        scheduledAt: ((settings as any)?.maintenance?.scheduledAt ?? (safeDefaults.maintenance as MaintenanceSettings).scheduledAt) as any,
-        estimatedDuration: ((settings as any)?.maintenance?.estimatedDuration ?? (safeDefaults.maintenance as MaintenanceSettings).estimatedDuration) as any,
+        ...defaultMaintenance,
+        ...(settings.maintenance ?? {}),
+        enabled: Boolean(
+          (settings.maintenance?.enabled ??
+            defaultMaintenance.enabled) as boolean,
+        ),
       };
 
       const mergedFeatures: FeatureFlags = {
-        ...(safeDefaults.features as FeatureFlags),
-        ...((settings as any)?.features || {}),
+        ...defaultFeatures,
+        ...(settings.features ?? {}),
       };
 
-      const mergedGeneral: any = {
-        ...(safeDefaults as any).general,
-        ...((settings as any)?.general || {}),
+      const mergedGeneral: GeneralSettings = {
+        ...defaultGeneral,
+        ...(settings.general ?? {}),
       };
 
-      const mergedSecurity: any = {
-        ...(safeDefaults as any).security,
-        ...((settings as any)?.security || {}),
+      const mergedSecurity: SecuritySettings = {
+        ...defaultSecurity,
+        ...(settings.security ?? {}),
       };
 
       const mergedEmail: EmailSettings = {
-        ...(safeDefaults.email as EmailSettings),
-        ...(((settings as any)?.email || {}) as EmailSettings),
+        ...defaultEmail,
+        ...(settings.email ?? {}),
         templates: {
-          ...((safeDefaults.email as EmailSettings).templates || {}),
-          ...((((settings as any)?.email || {}) as EmailSettings).templates || {}),
+          ...(defaultEmail.templates || {}),
+          ...((settings.email?.templates || {}) as EmailTemplates),
         },
       };
 
-      const mergedPayments: any = {
-        ...(safeDefaults as any).payments,
-        ...((settings as any)?.payments || {}),
+      const mergedPayments: PaymentSettings = {
+        ...defaultPayments,
+        ...(settings.payments ?? {}),
       };
 
       const merged: SystemSettingsShape = {
-        ...safeDefaults,
-        ...(settings || {}),
+        general: mergedGeneral,
         maintenance: mergedMaintenance,
         features: mergedFeatures,
-        general: mergedGeneral,
         security: mergedSecurity,
         email: mergedEmail,
         payments: mergedPayments,
@@ -191,15 +230,22 @@ export class SystemSettingsService {
       this.cache = { settings: merged, fetchedAt: now };
       return merged;
     } catch (err) {
-      this.logger.warn(`Failed to load system settings, using safe defaults. Error: ${err}`);
+      this.logger.warn(
+        `Failed to load system settings, using safe defaults. Error: ${err}`,
+      );
       const fallback: SystemSettingsShape = {
         general: {
-          siteName: 'TaskZen',
+          siteName: "TaskZen",
           maxBoardsPerUser: 3,
           maxCardsPerBoard: 100,
           maxFileSize: 5,
         },
-        maintenance: { enabled: false, message: null, scheduledAt: null, estimatedDuration: null },
+        maintenance: {
+          enabled: false,
+          message: null,
+          scheduledAt: null,
+          estimatedDuration: null,
+        },
         features: {
           enableRegistration: true,
           enableGoogleAuth: false,
@@ -223,13 +269,13 @@ export class SystemSettingsService {
         },
         email: {
           enabled: false,
-          provider: 'smtp',
-          fromEmail: 'noreply@taskzen.app',
-          fromName: 'TaskZen',
-          smtpHost: 'smtp.gmail.com',
+          provider: "smtp",
+          fromEmail: "noreply@taskzen.app",
+          fromName: "TaskZen",
+          smtpHost: "smtp.gmail.com",
           smtpPort: 587,
-          smtpUser: '',
-          smtpPassword: '',
+          smtpUser: "",
+          smtpPassword: "",
           templates: {
             welcome: true,
             passwordReset: true,
@@ -239,8 +285,8 @@ export class SystemSettingsService {
         },
         payments: {
           enabled: true,
-          provider: 'stripe',
-          currency: 'USD',
+          provider: "stripe",
+          currency: "USD",
           monthlyPrice: 9.99,
           yearlyPrice: 99.99,
           trialDays: 14,

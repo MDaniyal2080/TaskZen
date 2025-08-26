@@ -1,16 +1,16 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as multer from 'multer';
-import * as path from 'path';
-import * as fs from 'fs';
-import { randomUUID } from 'crypto';
+import { Injectable, BadRequestException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import * as multer from "multer";
+import * as path from "path";
+import * as fs from "fs";
+import { randomUUID } from "crypto";
 
 @Injectable()
 export class UploadService {
   private uploadPath: string;
 
   constructor(private configService: ConfigService) {
-    this.uploadPath = this.configService.get('UPLOAD_PATH') || './uploads';
+    this.uploadPath = this.configService.get("UPLOAD_PATH") || "./uploads";
     this.ensureUploadDirectory();
   }
 
@@ -33,17 +33,17 @@ export class UploadService {
       }),
       fileFilter: (req, file, callback) => {
         const allowedMimes = [
-          'image/jpeg',
-          'image/png',
-          'image/gif',
-          'image/webp',
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'text/plain',
-          'application/zip',
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "image/webp",
+          "application/pdf",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "text/plain",
+          "application/zip",
         ];
 
         if (allowedMimes.includes(file.mimetype)) {
@@ -51,7 +51,7 @@ export class UploadService {
         } else {
           callback(
             new BadRequestException(
-              `Invalid file type. Allowed types: ${allowedMimes.join(', ')}`,
+              `Invalid file type. Allowed types: ${allowedMimes.join(", ")}`,
             ),
             false,
           );
