@@ -25,6 +25,17 @@ import { diskStorage } from "multer";
 import { extname } from "path";
 import { NotificationPreferencesDto } from "./dto/notification-preferences.dto";
 import { UiPreferencesDto } from "./dto/ui-preferences.dto";
+import * as fs from "fs";
+
+// Ensure upload directory exists to avoid ENOENT during file writes
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  }
+} catch {
+  // Ignore directory creation errors here; multer will surface errors if any
+}
 
 @Controller("users")
 @UseGuards(JwtAuthGuard)
@@ -141,7 +152,7 @@ export class UsersController {
   @UseInterceptors(
     FileInterceptor("file", {
       storage: diskStorage({
-        destination: "./uploads",
+        destination: UPLOAD_DIR,
         filename: (req, file, cb) => {
           const uniqueSuffix =
             Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -151,8 +162,12 @@ export class UsersController {
       limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
       fileFilter: (req, file, cb) => {
         const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-        if (allowed.includes(file.mimetype)) cb(null, true);
-        else cb(new BadRequestException("Only image files are allowed"), false);
+        if (allowed.includes(file.mimetype)) {
+          return cb(null, true);
+        }
+        // Do not throw from fileFilter to avoid aborting the stream (causes ECONNRESET)
+        (req as any).fileValidationError = "Only image files are allowed";
+        return cb(null, false);
       },
     }),
   )
@@ -165,7 +180,8 @@ export class UsersController {
       throw new ForbiddenException("You can only update your own avatar");
     }
     if (!file) {
-      throw new BadRequestException("No file uploaded");
+      const msg = (req as any)?.fileValidationError || "No file uploaded";
+      throw new BadRequestException(msg);
     }
     const avatarPath = `/uploads/${file.filename}`;
     const user = await this.usersService.updateAvatar(id, avatarPath);

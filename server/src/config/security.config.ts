@@ -24,6 +24,11 @@ export const helmetConfig = helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: { policy: "same-origin" },
   crossOriginResourcePolicy: { policy: "cross-origin" },
+  // Strengthen transport and privacy in production
+  hsts: isProd
+    ? { maxAge: 31536000, includeSubDomains: true, preload: false }
+    : false,
+  referrerPolicy: { policy: "no-referrer" },
 });
 
 export const corsConfig = {

@@ -117,12 +117,23 @@ export class AdminController {
   @Get("analytics/export")
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("ADMIN")
+  @ApiQuery({
+    name: "timeRange",
+    required: false,
+    type: String,
+    description: "Time range window for analytics (e.g., 7d, 30d, 90d, 1y)",
+  })
   async exportAnalytics(
     @Query("format") format: "csv" | "pdf" = "csv",
+    @Query("timeRange") timeRange: string | undefined,
     @Req() req: RequestWithUser,
     @Res() res: Response,
   ) {
-    const data = await this.adminService.exportAnalytics(req.user.role, format);
+    const data = await this.adminService.exportAnalytics(
+      req.user.role,
+      format,
+      timeRange,
+    );
 
     if (format === "csv") {
       res.setHeader("Content-Type", "text/csv");

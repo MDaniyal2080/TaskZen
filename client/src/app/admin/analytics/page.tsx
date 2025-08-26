@@ -23,7 +23,6 @@ interface AnalyticsData {
     completionRate: number
     avgTasksPerUser: number
     proUsers: number
-    revenue: number
   }
   growth: {
     userGrowth: number
@@ -56,8 +55,8 @@ interface AnalyticsData {
   }
 }
 
-async function fetchAnalytics(): Promise<AnalyticsData> {
-  const response = await api.get('/admin/analytics')
+async function fetchAnalytics(range: string): Promise<AnalyticsData> {
+  const response = await api.get('/admin/analytics', { params: { timeRange: range } })
   return response.data
 }
 
@@ -69,7 +68,7 @@ export default function AnalyticsPage() {
 
   const { data: analytics, isLoading, refetch } = useQuery({
     queryKey: ['admin', 'analytics', timeRange],
-    queryFn: fetchAnalytics,
+    queryFn: () => fetchAnalytics(timeRange),
     enabled: user?.role === 'ADMIN'
   })
 
@@ -84,7 +83,7 @@ export default function AnalyticsPage() {
     setExportLoading(true)
     try {
       const response = await api.get('/admin/analytics/export', {
-        params: { format },
+        params: { format, timeRange },
         responseType: 'blob'
       })
       

@@ -116,154 +116,30 @@ export class SystemSettingsService {
             setTimeout(
               () =>
                 reject(
-                  new Error(`SystemSettings fetch timeout after ${timeoutMs}ms`),
+                  new Error(
+                    `SystemSettings fetch timeout after ${timeoutMs}ms`,
+                  ),
                 ),
               timeoutMs,
             ),
           ),
         ]);
 
-      const defaultGeneral: GeneralSettings = {
-        siteName: "TaskZen",
-        maxBoardsPerUser: 3,
-        maxCardsPerBoard: 100,
-        maxFileSize: 5,
-      };
-
-      const defaultMaintenance: MaintenanceSettings = {
-        enabled: false,
-        message: null,
-        scheduledAt: null,
-        estimatedDuration: null,
-      };
-
-      const defaultFeatures: FeatureFlags = {
-        enableRegistration: true,
-        enableGoogleAuth: false,
-        enableEmailNotifications: true,
-        enableRealTimeUpdates: true,
-        enableFileUploads: true,
-        enableComments: true,
-        enablePublicBoards: false,
-        enableAnalytics: true,
-      };
-
-      const defaultSecurity: SecuritySettings = {
-        requireEmailVerification: false,
-        enableTwoFactor: false,
-        sessionTimeout: 10080, // minutes (7 days)
-        passwordMinLength: 6,
-        maxLoginAttempts: 5,
-        loginAttemptWindowSec: 900,
-        enableRateLimiting: true,
-        rateLimitRequests: 100,
-        rateLimitWindow: 60, // seconds
-      };
-
-      const defaultEmail: EmailSettings = {
-        enabled: false,
-        provider: "smtp",
-        fromEmail: "noreply@taskzen.app",
-        fromName: "TaskZen",
-        smtpHost: "smtp.gmail.com",
-        smtpPort: 587,
-        smtpUser: "",
-        smtpPassword: "",
-        templates: {
-          welcome: true,
-          passwordReset: true,
-          emailVerification: true,
-          subscription: true,
-        },
-      };
-
-      const defaultPayments: PaymentSettings = {
-        enabled: true,
-        provider: "stripe",
-        currency: "USD",
-        monthlyPrice: 9.99,
-        yearlyPrice: 99.99,
-        trialDays: 14,
-      };
-
-      const settings: SystemSettingsShape =
-        (row?.data as unknown as SystemSettingsShape) ||
-        ({} as SystemSettingsShape);
-
-      const mergedMaintenance: MaintenanceSettings = {
-        ...defaultMaintenance,
-        ...(settings.maintenance ?? {}),
-        enabled: Boolean(
-          (settings.maintenance?.enabled ??
-            defaultMaintenance.enabled) as boolean,
-        ),
-      };
-
-      const mergedFeatures: FeatureFlags = {
-        ...defaultFeatures,
-        ...(settings.features ?? {}),
-      };
-
-      const mergedGeneral: GeneralSettings = {
-        ...defaultGeneral,
-        ...(settings.general ?? {}),
-      };
-
-      const mergedSecurity: SecuritySettings = {
-        ...defaultSecurity,
-        ...(settings.security ?? {}),
-      };
-
-      const mergedEmail: EmailSettings = {
-        ...defaultEmail,
-        ...(settings.email ?? {}),
-        templates: {
-          ...(defaultEmail.templates || {}),
-          ...((settings.email?.templates || {}) as EmailTemplates),
-        },
-      };
-
-      const mergedPayments: PaymentSettings = {
-        ...defaultPayments,
-        ...(settings.payments ?? {}),
-      };
-
-      const merged: SystemSettingsShape = {
-        general: mergedGeneral,
-        maintenance: mergedMaintenance,
-        features: mergedFeatures,
-        security: mergedSecurity,
-        email: mergedEmail,
-        payments: mergedPayments,
-      };
-      this.cache = { settings: merged, fetchedAt: Date.now() };
-      return merged;
-    } catch (err) {
-      this.logger.warn(
-        `Failed to load system settings, using safe defaults or stale cache. Error: ${err}`,
-      );
-      // Prefer stale cached settings (even if TTL expired) over hardcoded defaults
-      if (this.cache.settings) {
-        this.logger.warn(
-          `Returning stale system settings from cache due to fetch failure`,
-        );
-        this.cache = { settings: this.cache.settings, fetchedAt: Date.now() };
-        return this.cache.settings;
-      }
-      const fallback: SystemSettingsShape = {
-        general: {
+        const defaultGeneral: GeneralSettings = {
           siteName: "TaskZen",
           maxBoardsPerUser: 3,
           maxCardsPerBoard: 100,
           maxFileSize: 5,
-        },
-        maintenance: {
+        };
+
+        const defaultMaintenance: MaintenanceSettings = {
           enabled: false,
           message: null,
           scheduledAt: null,
           estimatedDuration: null,
-        },
-        features: {
+        };
+
+        const defaultFeatures: FeatureFlags = {
           enableRegistration: true,
           enableGoogleAuth: false,
           enableEmailNotifications: true,
@@ -272,19 +148,21 @@ export class SystemSettingsService {
           enableComments: true,
           enablePublicBoards: false,
           enableAnalytics: true,
-        },
-        security: {
+        };
+
+        const defaultSecurity: SecuritySettings = {
           requireEmailVerification: false,
           enableTwoFactor: false,
-          sessionTimeout: 10080,
+          sessionTimeout: 10080, // minutes (7 days)
           passwordMinLength: 6,
           maxLoginAttempts: 5,
           loginAttemptWindowSec: 900,
           enableRateLimiting: true,
           rateLimitRequests: 100,
-          rateLimitWindow: 60,
-        },
-        email: {
+          rateLimitWindow: 60, // seconds
+        };
+
+        const defaultEmail: EmailSettings = {
           enabled: false,
           provider: "smtp",
           fromEmail: "noreply@taskzen.app",
@@ -299,23 +177,167 @@ export class SystemSettingsService {
             emailVerification: true,
             subscription: true,
           },
-        },
-        payments: {
+        };
+
+        const defaultPayments: PaymentSettings = {
           enabled: true,
           provider: "stripe",
           currency: "USD",
           monthlyPrice: 9.99,
           yearlyPrice: 99.99,
           trialDays: 14,
-        },
-      };
-      // Cache fallback to avoid repeated slow attempts for TTL duration
-      this.cache = { settings: fallback, fetchedAt: Date.now() };
-      return fallback;
-    } finally {
-      this.inFlight = null;
-    }
+        };
+
+        const settings: SystemSettingsShape =
+          (row?.data as unknown as SystemSettingsShape) ||
+          ({} as SystemSettingsShape);
+
+        const mergedMaintenance: MaintenanceSettings = {
+          ...defaultMaintenance,
+          ...(settings.maintenance ?? {}),
+          enabled: Boolean(
+            (settings.maintenance?.enabled ??
+              defaultMaintenance.enabled) as boolean,
+          ),
+        };
+
+        const mergedFeatures: FeatureFlags = {
+          ...defaultFeatures,
+          ...(settings.features ?? {}),
+        };
+
+        const mergedGeneral: GeneralSettings = {
+          ...defaultGeneral,
+          ...(settings.general ?? {}),
+        };
+
+        const mergedSecurity: SecuritySettings = {
+          ...defaultSecurity,
+          ...(settings.security ?? {}),
+        };
+
+        const mergedEmail: EmailSettings = {
+          ...defaultEmail,
+          ...(settings.email ?? {}),
+          templates: {
+            ...(defaultEmail.templates || {}),
+            ...((settings.email?.templates || {}) as EmailTemplates),
+          },
+        };
+
+        const mergedPayments: PaymentSettings = {
+          ...defaultPayments,
+          ...(settings.payments ?? {}),
+        };
+
+        const merged: SystemSettingsShape = {
+          general: mergedGeneral,
+          maintenance: mergedMaintenance,
+          features: mergedFeatures,
+          security: mergedSecurity,
+          email: mergedEmail,
+          payments: mergedPayments,
+        };
+        this.cache = { settings: merged, fetchedAt: Date.now() };
+        return merged;
+      } catch (err) {
+        this.logger.warn(
+          `Failed to load system settings, using safe defaults or stale cache. Error: ${err}`,
+        );
+        // Prefer stale cached settings (even if TTL expired) over hardcoded defaults
+        if (this.cache.settings) {
+          this.logger.warn(
+            `Returning stale system settings from cache due to fetch failure`,
+          );
+          this.cache = { settings: this.cache.settings, fetchedAt: Date.now() };
+          return this.cache.settings;
+        }
+        const fallback: SystemSettingsShape = {
+          general: {
+            siteName: "TaskZen",
+            maxBoardsPerUser: 3,
+            maxCardsPerBoard: 100,
+            maxFileSize: 5,
+          },
+          maintenance: {
+            enabled: false,
+            message: null,
+            scheduledAt: null,
+            estimatedDuration: null,
+          },
+          features: {
+            enableRegistration: true,
+            enableGoogleAuth: false,
+            enableEmailNotifications: true,
+            enableRealTimeUpdates: true,
+            enableFileUploads: true,
+            enableComments: true,
+            enablePublicBoards: false,
+            enableAnalytics: true,
+          },
+          security: {
+            requireEmailVerification: false,
+            enableTwoFactor: false,
+            sessionTimeout: 10080,
+            passwordMinLength: 6,
+            maxLoginAttempts: 5,
+            loginAttemptWindowSec: 900,
+            enableRateLimiting: true,
+            rateLimitRequests: 100,
+            rateLimitWindow: 60,
+          },
+          email: {
+            enabled: false,
+            provider: "smtp",
+            fromEmail: "noreply@taskzen.app",
+            fromName: "TaskZen",
+            smtpHost: "smtp.gmail.com",
+            smtpPort: 587,
+            smtpUser: "",
+            smtpPassword: "",
+            templates: {
+              welcome: true,
+              passwordReset: true,
+              emailVerification: true,
+              subscription: true,
+            },
+          },
+          payments: {
+            enabled: true,
+            provider: "stripe",
+            currency: "USD",
+            monthlyPrice: 9.99,
+            yearlyPrice: 99.99,
+            trialDays: 14,
+          },
+        };
+        // Cache fallback to avoid repeated slow attempts for TTL duration
+        this.cache = { settings: fallback, fetchedAt: Date.now() };
+        return fallback;
+      } finally {
+        this.inFlight = null;
+      }
     })();
     return this.inFlight;
+  }
+
+  // Explicit cache controls to ensure immediate propagation after admin updates
+  // Use setCache right after DB writes to avoid stale reads when a fetch might time out
+  public setCache(settings: SystemSettingsShape) {
+    this.cache = { settings, fetchedAt: Date.now() };
+    try {
+      const enabled = (settings as any)?.maintenance?.enabled;
+      this.logger.log(
+        `SystemSettings cache set (maintenance.enabled=${String(enabled)})`,
+      );
+    } catch (_) {
+      // no-op
+    }
+  }
+
+  public invalidateCache() {
+    this.cache = { settings: null, fetchedAt: 0 };
+    this.inFlight = null;
+    this.logger.log("SystemSettings cache invalidated");
   }
 }

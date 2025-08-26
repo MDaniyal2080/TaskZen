@@ -1,8 +1,18 @@
 import { WinstonModuleOptions } from "nest-winston";
 import * as winston from "winston";
 import * as path from "path";
+import * as fs from "fs";
 
 const logDir = path.join(process.cwd(), "logs");
+
+// Ensure log directory exists to prevent Winston file transport errors
+try {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+} catch {
+  // If directory creation fails, Winston will still log to console; file transports may error
+}
 
 export const loggerConfig: WinstonModuleOptions = {
   transports: [

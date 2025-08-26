@@ -19,6 +19,14 @@ export class AdminService {
     private readonly systemSettings: SystemSettingsService,
   ) {}
 
+  // Simple in-memory cache for analytics to reduce DB load under frequent access
+  private analyticsCache = new Map<string, { value: any; expiresAt: number }>();
+  private get analyticsCacheTtlMs() {
+    const n = Number(process.env.ADMIN_ANALYTICS_CACHE_TTL_MS || 20000);
+    // clamp 5s - 60s
+    return Math.min(60000, Math.max(5000, Number.isFinite(n) ? n : 20000));
+  }
+
   // Access control for admin-only operations
   private checkAdminRole(role: UserRole) {
     if (role !== "ADMIN") {
@@ -39,36 +47,86 @@ export class AdminService {
     }));
   }
 
+  // Fill zero-count gaps for daily series between start and end (inclusive)
+  private fillDailySeries(
+    start: Date,
+    end: Date,
+    entries: Array<{ date: string; count: number }>,
+  ) {
+    const map = new Map(entries.map((e) => [e.date, e.count]));
+    const out: Array<{ date: string; count: number }> = [];
+    const d0 = new Date(
+      Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()),
+    );
+    const d1 = new Date(
+      Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()),
+    );
+    for (
+      let d = d0;
+      d.getTime() <= d1.getTime();
+      d = new Date(d.getTime() + 86400000)
+    ) {
+      const key = d.toISOString().split("T")[0];
+      out.push({ date: key, count: map.get(key) ?? 0 });
+    }
+    return out;
+  }
+
+  private getIsoWeekLabel(date: Date) {
+    // ISO week number, label like YYYY-Www
+    const d = new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+    );
+    const dayNum = d.getUTCDay() || 7; // 1..7 (Mon..Sun)
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil(
+      ((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
+    );
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+  }
+
+  private getMonthLabel(date: Date) {
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  }
+
   private async calculateMonthlyRevenueSeries(
     months: number,
     now: Date = new Date(),
   ) {
-    const series: { month: string; amount: number }[] = [];
-    // Start from months-1 ago up to current month
+    // Build windows then query in parallel for lower end-to-end latency
     const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
-    for (let i = 0; i < months; i++) {
+    const windows = Array.from({ length: months }, (_, i) => {
       const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
       const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
       const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-
-      const agg = await this.prisma.transaction
-        .aggregate({
-          where: {
-            status: TransactionStatus.SUCCEEDED,
-            createdAt: { gte: monthStart, lt: monthEnd },
-          },
-          _sum: { amount: true },
-        })
-        .catch(() => ({ _sum: { amount: 0 } }) as TxAgg);
-
-      const amount = Number(agg._sum.amount ?? 0);
       const label = monthStart.toLocaleString("default", {
         month: "short",
         year: "numeric",
       });
-      series.push({ month: label, amount });
-    }
-    return series;
+      return { monthStart, monthEnd, label };
+    });
+
+    const results = await Promise.all(
+      windows.map(({ monthStart, monthEnd }) =>
+        this.prisma.transaction
+          .aggregate({
+            where: {
+              status: TransactionStatus.SUCCEEDED,
+              createdAt: { gte: monthStart, lt: monthEnd },
+            },
+            _sum: { amount: true },
+          })
+          .catch(() => ({ _sum: { amount: 0 } }) as TxAgg),
+      ),
+    );
+
+    return results.map((agg, idx) => ({
+      month: windows[idx].label,
+      amount: Number(agg._sum.amount ?? 0),
+    }));
   }
 
   async getAnalytics(userRole: UserRole, timeRange?: string) {
@@ -76,11 +134,23 @@ export class AdminService {
     // Parse time range
     const parseDays = (tr?: string) => {
       if (!tr) return 30;
-      const m = /^([0-9]+)d$/i.exec(tr.trim());
-      if (m) return Math.max(1, Number(m[1]));
+      const t = tr.trim().toLowerCase();
+      const mDays = /^([0-9]+)d$/.exec(t);
+      if (mDays) return Math.max(1, Number(mDays[1]));
+      const mYears = /^([0-9]+)y$/.exec(t);
+      if (mYears) return Math.max(1, Number(mYears[1]) * 365);
       return 30;
     };
     const days = parseDays(timeRange);
+
+    // Cache check
+    const cacheKey = `analytics:${days}`;
+    const nowMs = Date.now();
+    const cached = this.analyticsCache.get(cacheKey);
+    if (cached && cached.expiresAt > nowMs) {
+      return cached.value;
+    }
+
     const now = new Date();
     const startCurr = new Date(now);
     startCurr.setDate(now.getDate() - days);
@@ -90,100 +160,108 @@ export class AdminService {
     const growthPct = (curr: number, prev: number) =>
       prev > 0 ? ((curr - prev) / prev) * 100 : curr > 0 ? 100 : 0;
 
-    // Overview (sequential to avoid pool pressure)
-    const totalUsers = await this.prisma.user.count();
-    const activeUsers = await this.prisma.user.count({
-      where: { isActive: true },
-    });
-    const proUsersCount = await this.prisma.user.count({
-      where: { isPro: true },
-    });
-    const totalBoards = await this.prisma.board.count();
-    const totalTasks = await this.prisma.card.count();
-    const completedTasks = await this.prisma.card.count({
-      where: { isCompleted: true },
-    });
+    // Pre-start monthly revenue calculation to overlap with other queries
+    const revenueMonthlyPromise = this.calculateMonthlyRevenueSeries(12);
+
+    // Batch A: overview counts, overdue, settings, userActivity source, completed cards for avg completion
+    const [
+      totalUsers,
+      activeUsers,
+      proUsersCount,
+      totalBoards,
+      totalTasks,
+      completedTasks,
+      overdue,
+      settings,
+      userCreationsInRange,
+    ] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.user.count({ where: { isActive: true } }),
+      this.prisma.user.count({ where: { isPro: true } }),
+      this.prisma.board.count(),
+      this.prisma.card.count(),
+      this.prisma.card.count({ where: { isCompleted: true } }),
+      this.prisma.card.count({
+        where: { dueDate: { lt: new Date() }, isCompleted: false },
+      }),
+      this.systemSettings.getSettings(),
+      this.prisma.user.findMany({
+        where: { createdAt: { gte: startCurr, lte: now } },
+        select: { createdAt: true },
+      }),
+    ]);
 
     const completionRate =
       totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
     const avgTasksPerUser = totalUsers > 0 ? totalTasks / totalUsers : 0;
-
-    // Settings & revenue
-    const settings: SystemSettingsShape =
-      await this.systemSettings.getSettings();
-    const monthlyPrice = Number(settings.payments?.monthlyPrice ?? 9.99);
+    const monthlyPrice = Number(
+      (settings as SystemSettingsShape).payments?.monthlyPrice ?? 9.99,
+    );
     const mrr = Number((proUsersCount * monthlyPrice).toFixed(2));
     const arr = Number((mrr * 12).toFixed(2));
 
-    const proUsers = await this.prisma.user.findMany({
-      where: { isPro: true },
-      select: { id: true, createdAt: true, proExpiresAt: true },
-    });
-    const churnRate = (() => {
-      const nowD = new Date();
-      const expired = proUsers.filter(
-        (u) => u.proExpiresAt && new Date(u.proExpiresAt) < nowD,
-      ).length;
-      return proUsers.length > 0
-        ? Number(((expired / proUsers.length) * 100).toFixed(2))
-        : 0;
-    })();
+    // Batch B: growth metrics, revenue aggregates, boards, proUsers for churn
+    const [
+      usersPrev,
+      usersCurr,
+      boardsPrev,
+      boardsCurr,
+      tasksPrev,
+      tasksCurr,
+      revPrevAgg,
+      revCurrAgg,
+      boards,
+      proUsers,
+    ] = await Promise.all([
+      this.prisma.user.count({
+        where: { createdAt: { gte: startPrev, lt: endPrev } },
+      }),
+      this.prisma.user.count({
+        where: { createdAt: { gte: startCurr, lte: now } },
+      }),
+      this.prisma.board.count({
+        where: { createdAt: { gte: startPrev, lt: endPrev } },
+      }),
+      this.prisma.board.count({
+        where: { createdAt: { gte: startCurr, lte: now } },
+      }),
+      this.prisma.card.count({
+        where: { createdAt: { gte: startPrev, lt: endPrev } },
+      }),
+      this.prisma.card.count({
+        where: { createdAt: { gte: startCurr, lte: now } },
+      }),
+      this.prisma.transaction.aggregate({
+        where: {
+          status: TransactionStatus.SUCCEEDED,
+          createdAt: { gte: startPrev, lt: endPrev },
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.aggregate({
+        where: {
+          status: TransactionStatus.SUCCEEDED,
+          createdAt: { gte: startCurr, lte: now },
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.board.findMany({
+        include: { _count: { select: { lists: true, members: true } } },
+      }),
+      this.prisma.user.findMany({
+        where: { isPro: true },
+        select: { id: true, createdAt: true, proExpiresAt: true },
+      }),
+    ]);
 
-    // Growth metrics (users/boards/tasks)
-    const usersPrev = await this.prisma.user.count({
-      where: { createdAt: { gte: startPrev, lt: endPrev } },
-    });
-    const usersCurr = await this.prisma.user.count({
-      where: { createdAt: { gte: startCurr, lte: now } },
-    });
-    const boardsPrev = await this.prisma.board.count({
-      where: { createdAt: { gte: startPrev, lt: endPrev } },
-    });
-    const boardsCurr = await this.prisma.board.count({
-      where: { createdAt: { gte: startCurr, lte: now } },
-    });
-    const tasksPrev = await this.prisma.card.count({
-      where: { createdAt: { gte: startPrev, lt: endPrev } },
-    });
-    const tasksCurr = await this.prisma.card.count({
-      where: { createdAt: { gte: startCurr, lte: now } },
-    });
-
-    // Revenue growth via transactions
-    const revPrevAgg = await this.prisma.transaction.aggregate({
-      where: {
-        status: TransactionStatus.SUCCEEDED,
-        createdAt: { gte: startPrev, lt: endPrev },
-      },
-      _sum: { amount: true },
-    });
-    const revCurrAgg = await this.prisma.transaction.aggregate({
-      where: {
-        status: TransactionStatus.SUCCEEDED,
-        createdAt: { gte: startCurr, lte: now },
-      },
-      _sum: { amount: true },
-    });
     const revPrev = Number(revPrevAgg._sum.amount ?? 0);
     const revCurr = Number(revCurrAgg._sum.amount ?? 0);
 
-    // Task metrics
-    const overdue = await this.prisma.card.count({
-      where: { dueDate: { lt: new Date() }, isCompleted: false },
-    });
-
     // Board metrics
-    const boards = await this.prisma.board.findMany({
-      include: { _count: { select: { lists: true, members: true } } },
-    });
     const avgListsPerBoard = boards.length
       ? boards.reduce((acc, b) => acc + b._count.lists, 0) / boards.length
       : 0;
-    const avgCardsPerBoard = await (async () => {
-      // Fallback approximation using lists count if cards count by board is not easily accessible
-      // Keep simple: average 0 for now to avoid complex joins
-      return 0;
-    })();
+    const avgCardsPerBoard = 0; // Keep simple for now
     const mostActiveBoards = boards
       .map((b) => ({
         id: b.id,
@@ -193,7 +271,52 @@ export class AdminService {
       .sort((a, b) => b.activity - a.activity)
       .slice(0, 5);
 
-    return {
+    // Churn rate estimation
+    const nowD = new Date();
+    const expired = proUsers.filter(
+      (u) => u.proExpiresAt && new Date(u.proExpiresAt) < nowD,
+    ).length;
+    const churnRate =
+      proUsers.length > 0
+        ? Number(((expired / proUsers.length) * 100).toFixed(2))
+        : 0;
+
+    // User activity series
+    const dailyRaw = this.groupByDay(userCreationsInRange);
+    const daily = this.fillDailySeries(startCurr, now, dailyRaw);
+    const weeklyMap = new Map<string, number>();
+    const monthlyMap = new Map<string, number>();
+    daily.forEach(({ date, count }) => {
+      const d = new Date(`${date}T00:00:00.000Z`);
+      const w = this.getIsoWeekLabel(d);
+      const m = this.getMonthLabel(d);
+      weeklyMap.set(w, (weeklyMap.get(w) ?? 0) + count);
+      monthlyMap.set(m, (monthlyMap.get(m) ?? 0) + count);
+    });
+    const weekly = Array.from(weeklyMap.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([week, count]) => ({ week, count }));
+    const monthly = Array.from(monthlyMap.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([month, count]) => ({ month, count }));
+
+    // Avg completion time (days), computed in DB to reduce memory and latency
+    let avgCompletionTimeDays = 0;
+    try {
+      const rows = await this.prisma.$queryRaw<{ avg_days: number | null }[]>`
+        SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt" - "createdAt")) / 86400) AS avg_days
+        FROM "cards"
+        WHERE "isCompleted" = true
+          AND "updatedAt" IS NOT NULL
+          AND "createdAt" >= ${startCurr}
+          AND "createdAt" <= ${now}
+      `;
+      avgCompletionTimeDays = Number(rows?.[0]?.avg_days ?? 0);
+    } catch {
+      avgCompletionTimeDays = 0;
+    }
+
+    const result = {
       overview: {
         totalUsers,
         activeUsers,
@@ -206,10 +329,12 @@ export class AdminService {
       revenue: {
         mrr,
         arr,
+        monthly: await revenueMonthlyPromise,
         byPlan: [
           {
             plan: "Pro",
             amount: Number((proUsersCount * monthlyPrice).toFixed(2)),
+            users: proUsersCount,
           },
         ],
         churnRate,
@@ -221,10 +346,6 @@ export class AdminService {
         revenueGrowth: Number(growthPct(revCurr, revPrev).toFixed(2)),
       },
       taskMetrics: {
-        overview: {
-          completionRate,
-          overdue,
-        },
         byStatus: [
           { status: "completed", count: completedTasks },
           {
@@ -233,19 +354,40 @@ export class AdminService {
           },
         ],
         byPriority: [],
+        avgCompletionTime: Number(avgCompletionTimeDays.toFixed(1)),
+        overdueTasks: overdue,
+        // keep previous nested overview for backward compatibility
+        overview: { completionRate, overdue },
       },
       boardMetrics: {
         avgListsPerBoard: Number(avgListsPerBoard.toFixed(2)),
         avgCardsPerBoard: Number(avgCardsPerBoard.toFixed(2)),
         mostActiveBoards,
       },
+      userActivity: {
+        daily,
+        weekly,
+        monthly,
+      },
     };
+
+    // Set cache
+    this.analyticsCache.set(cacheKey, {
+      value: result,
+      expiresAt: Date.now() + this.analyticsCacheTtlMs,
+    });
+
+    return result;
   }
 
-  async exportAnalytics(userRole: UserRole, format: "csv" | "pdf") {
+  async exportAnalytics(
+    userRole: UserRole,
+    format: "csv" | "pdf",
+    timeRange?: string,
+  ) {
     this.checkAdminRole(userRole);
 
-    const analytics = await this.getAnalytics(userRole);
+    const analytics = await this.getAnalytics(userRole, timeRange);
     const settings: SystemSettingsShape =
       await this.systemSettings.getSettings();
     const currency = settings.payments?.currency || "USD";
@@ -694,7 +836,8 @@ export class AdminService {
       },
       update: { data: merged as unknown as Prisma.InputJsonValue },
     });
-    await this.systemSettings.getSettings(true);
+    // Immediately refresh in-memory cache to avoid stale reads
+    this.systemSettings.setCache(merged);
     return {
       success: true,
       message: "Settings updated successfully",
@@ -789,7 +932,8 @@ export class AdminService {
       },
       update: { data: updated as unknown as Prisma.InputJsonValue },
     });
-    await this.systemSettings.getSettings(true);
+    // Immediately refresh in-memory cache to avoid stale reads
+    this.systemSettings.setCache(updated);
     return {
       success: true,
       status: {

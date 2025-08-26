@@ -1,11 +1,23 @@
 import { ThrottlerModuleOptions } from "@nestjs/throttler";
 
+const toInt = (v: string | undefined, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+const ENABLE_RATE_LIMITING = process.env.ENABLE_RATE_LIMITING !== "false";
+const DEFAULT_TTL = toInt(
+  process.env.RATE_LIMIT_TTL || process.env.RATE_LIMIT_TTL_SEC,
+  60,
+);
+const DEFAULT_LIMIT = toInt(process.env.RATE_LIMIT_LIMIT, 100);
+
 export const rateLimiterConfig: ThrottlerModuleOptions = {
   throttlers: [
     {
       name: "default",
-      ttl: 60, // Time window in seconds
-      limit: 100, // Number of requests per ttl window
+      ttl: DEFAULT_TTL, // Time window in seconds
+      limit: DEFAULT_LIMIT, // Number of requests per ttl window
     },
   ],
   ignoreUserAgents: [
@@ -20,8 +32,9 @@ export const rateLimiterConfig: ThrottlerModuleOptions = {
     const isHealthCheck = url === "/health" || url === "/api/v1/health";
     const isStatus = url === "/status" || url === "/api/v1/status";
     const isAdmin = request.user?.role === "ADMIN";
+    const disabled = !ENABLE_RATE_LIMITING;
 
-    return isHealthCheck || isStatus || isAdmin;
+    return disabled || isHealthCheck || isStatus || isAdmin;
   },
 };
 
@@ -32,15 +45,15 @@ export const rateLimits = {
     limit: 5, // 5 attempts per 15 minutes for auth endpoints
   },
   api: {
-    ttl: 60,
-    limit: 100, // Standard API rate limit
+    ttl: DEFAULT_TTL,
+    limit: DEFAULT_LIMIT, // Standard API rate limit
   },
   upload: {
     ttl: 3600, // 1 hour
     limit: 10, // 10 uploads per hour
   },
   search: {
-    ttl: 60,
-    limit: 30, // 30 searches per minute
+    ttl: toInt(process.env.SEARCH_RATE_LIMIT_TTL, 60),
+    limit: toInt(process.env.SEARCH_RATE_LIMIT_LIMIT, 30), // 30 searches per minute
   },
 };

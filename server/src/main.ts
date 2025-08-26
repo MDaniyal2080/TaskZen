@@ -26,6 +26,12 @@ async function bootstrap() {
     logger,
   });
 
+  const isProd = process.env.NODE_ENV === "production";
+  if (isProd) {
+    // When behind a proxy/load balancer (e.g., Nginx, Vercel, Railway), trust X-Forwarded-* headers
+    app.set("trust proxy", 1);
+  }
+
   const configService = app.get(ConfigService);
   const prismaService = app.get(PrismaService);
   await prismaService.enableShutdownHooks(app);
@@ -74,31 +80,43 @@ async function bootstrap() {
   const uploadPath = configService.get("UPLOAD_PATH", "uploads");
   app.useStaticAssets(join(process.cwd(), uploadPath), {
     prefix: "/uploads/",
+    setHeaders: (res) => {
+      // Cache uploaded assets for 1 hour; adjust via CDN if fronted
+      res.setHeader("Cache-Control", "public, max-age=3600, immutable");
+    },
   });
 
   // Global prefix
   app.setGlobalPrefix("api/v1");
 
-  // Swagger (OpenAPI) setup
-  const config = new DocumentBuilder()
-    .setTitle("TaskZen API")
-    .setDescription("TaskZen backend API documentation")
-    .setVersion("1.0.0")
-    .addBearerAuth({
-      type: "http",
-      scheme: "bearer",
-      bearerFormat: "JWT",
-      in: "header",
-    })
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("api/docs", app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      displayRequestDuration: true,
-    },
-    customSiteTitle: "TaskZen API Docs",
-  });
+  // Swagger (OpenAPI) setup - disabled in production unless explicitly enabled
+  const enableSwagger =
+    process.env.ENABLE_SWAGGER === "true" ||
+    (process.env.NODE_ENV !== "production" &&
+      process.env.ENABLE_SWAGGER !== "false");
+  if (enableSwagger) {
+    const config = new DocumentBuilder()
+      .setTitle("TaskZen API")
+      .setDescription("TaskZen backend API documentation")
+      .setVersion("1.0.0")
+      .addBearerAuth({
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+        in: "header",
+      })
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup("api/docs", app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        displayRequestDuration: true,
+      },
+      customSiteTitle: "TaskZen API Docs",
+    });
+  } else {
+    Logger.log("Swagger disabled in production", "Bootstrap");
+  }
 
   const port = configService.get("PORT", 3001);
   const host = "0.0.0.0";

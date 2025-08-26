@@ -4,16 +4,19 @@ import * as request from "supertest";
 import * as cookieParser from "cookie-parser";
 import { AppModule } from "../src/app.module";
 import { validationConfig } from "../src/config/security.config";
+import { PrismaService } from "../src/database/prisma.service";
 import { join, resolve } from "path";
 import * as fs from "fs";
 
 // Helpers
-const unique = () => Date.now() + "-" + Math.floor(Math.random() * 1e6);
+const unique = () =>
+  Date.now().toString(36).slice(-6) + Math.random().toString(36).slice(2, 6);
 const csrfToken = "csrf-test-token";
 
 describe("User Profile E2E", () => {
   let app: INestApplication;
   let server: any;
+  let prisma: PrismaService;
 
   let user1: any;
   let token1: string;
@@ -35,6 +38,7 @@ describe("User Profile E2E", () => {
 
     await app.init();
     server = app.getHttpServer();
+    prisma = app.get(PrismaService);
 
     // Sanity check test assets exist
     expect(fs.existsSync(pngPath)).toBe(true);
@@ -42,6 +46,7 @@ describe("User Profile E2E", () => {
   });
 
   afterAll(async () => {
+    await prisma?.$disconnect();
     await app.close();
   });
 
