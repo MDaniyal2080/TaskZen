@@ -16,6 +16,9 @@ export default function TopLoader() {
   // Track navigation start before the path updates (best-effort) by capturing link clicks.
   const [routeLoading, setRouteLoading] = React.useState(false);
   const routeLoadingTimer = React.useRef<number | null>(null);
+  // Safety: hard stop if loader stays active too long (e.g., background queries)
+  const ACTIVE_SAFETY_MAX_MS = 15000; // 15s max visibility
+  const ROUTE_CHANGE_AUTO_STOP_MS = 2000; // stop optimistic route loader after 2s if no URL change
 
   React.useEffect(() => {
     const onClickCapture = (e: MouseEvent) => {
@@ -101,6 +104,16 @@ export default function TopLoader() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, searchParams]);
 
+  // Fallback: if we started a route navigation but the URL never changed (prevented link, same-page nav),
+  // stop the optimistic loader after a short maximum duration.
+  React.useEffect(() => {
+    if (!routeLoading) return;
+    const t = window.setTimeout(() => {
+      stopRouteLoading();
+    }, ROUTE_CHANGE_AUTO_STOP_MS);
+    return () => window.clearTimeout(t);
+  }, [routeLoading]);
+
   const startRouteLoading = () => {
     if (routeLoadingTimer.current) {
       window.clearTimeout(routeLoadingTimer.current);
@@ -120,7 +133,35 @@ export default function TopLoader() {
     }, 200) as unknown as number;
   };
 
-  const active = routeLoading || isFetching > 0 || isMutating > 0;
+  const rawActive = routeLoading || isFetching > 0 || isMutating > 0;
+  const [safetyForced, setSafetyForced] = React.useState(false);
+  const [safetyStartAt, setSafetyStartAt] = React.useState<number | null>(null);
+
+  // Track active periods and apply a safety cutoff
+  React.useEffect(() => {
+    if (rawActive) {
+      setSafetyForced(false);
+      if (safetyStartAt == null) setSafetyStartAt(Date.now());
+    } else {
+      setSafetyStartAt(null);
+      setSafetyForced(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawActive]);
+
+  React.useEffect(() => {
+    if (safetyStartAt == null) return;
+    const elapsed = Date.now() - safetyStartAt;
+    const remaining = Math.max(0, ACTIVE_SAFETY_MAX_MS - elapsed);
+    const t = window.setTimeout(() => {
+      // Force-complete the loader to avoid being stuck
+      setSafetyForced(true);
+      setRouteLoading(false);
+    }, remaining);
+    return () => window.clearTimeout(t);
+  }, [safetyStartAt]);
+
+  const active = rawActive && !safetyForced;
 
   // Progress simulation: ramp to 90% while active; complete to 100% then hide
   const [progress, setProgress] = React.useState(0);
