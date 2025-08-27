@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +16,7 @@ import { useSettings } from '@/contexts/SettingsContext'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { login, isLoading } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
   const { settings } = useSettings()
@@ -29,9 +30,19 @@ export default function LoginPage() {
   useEffect(() => {
     const current = useAuthStore.getState().user
     if (current) {
+      const nextFromQuery = searchParams?.get('next') || ''
+      const sanitized = nextFromQuery.startsWith('/') ? nextFromQuery : ''
+      if (sanitized) {
+        if (sanitized.startsWith('/admin') && current.role !== 'ADMIN') {
+          router.replace('/boards')
+        } else {
+          router.replace(sanitized)
+        }
+        return
+      }
       router.replace(current.role === 'ADMIN' ? '/admin' : '/boards')
     }
-  }, [router])
+  }, [router, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,12 +51,19 @@ export default function LoginPage() {
       const user = await login(formData.email, formData.password)
       toast.success('Welcome back!')
       
-      // Redirect based on user role
-      if (user.role === 'ADMIN') {
-        router.replace('/admin')
-      } else {
-        router.replace('/boards')
+      // Honor ?next=... if provided and allowed by role
+      const nextFromQuery = searchParams?.get('next') || ''
+      const sanitized = nextFromQuery.startsWith('/') ? nextFromQuery : ''
+      if (sanitized) {
+        if (sanitized.startsWith('/admin') && user.role !== 'ADMIN') {
+          router.replace('/boards')
+        } else {
+          router.replace(sanitized)
+        }
+        return
       }
+      // Otherwise role-based default
+      router.replace(user.role === 'ADMIN' ? '/admin' : '/boards')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Login failed'
       toast.error(message)

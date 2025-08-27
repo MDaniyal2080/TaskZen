@@ -33,6 +33,17 @@ DB_CONNECT_TIMEOUT_MS=8000
 # Swagger
 ENABLE_SWAGGER=false
 
+# Admin Analytics / Dashboard (optional)
+# Cache TTLs for admin analytics and hot endpoints
+ADMIN_ANALYTICS_CACHE_TTL_MS=20000
+ADMIN_SMALL_CACHE_TTL_MS=3000
+
+# Map external billing plan identifiers to canonical labels used by the UI.
+# Helpful if Stripe price IDs or vendor plan names differ from "Pro Monthly"/"Pro Annual".
+# Example:
+# ADMIN_PLAN_ALIASES_JSON='{"price_monthly_usd":"Pro Monthly","price_yearly_usd":"Pro Annual"}'
+ADMIN_PLAN_ALIASES_JSON=""
+
 # Optional: Redis cache (and for Socket.IO adapter when scaling)
 # REDIS_URL=redis://default:<password>@<host>:<port>/<db>
 # REDIS_HOST=<host>

@@ -18,11 +18,24 @@ export function setAuthToken(token: string | null) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`
     try {
       localStorage.setItem('taskzen_token', token)
+      // Mirror token into a cookie so Next.js middleware can read it server-side
+      // Note: cannot set HttpOnly from client; this complements localStorage for middleware-only checks
+      const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:'
+      const maxAge = 60 * 60 * 24 * 7 // 7 days (matches default server session)
+      const parts = [
+        `taskzen_token=${encodeURIComponent(token)}`,
+        'Path=/',
+        `Max-Age=${maxAge}`,
+        isSecure ? 'Secure; SameSite=None' : 'SameSite=Lax',
+      ]
+      document.cookie = parts.join('; ')
     } catch {}
   } else {
     delete api.defaults.headers.common['Authorization']
     try {
       localStorage.removeItem('taskzen_token')
+      // Proactively clear the cookie copy
+      document.cookie = 'taskzen_token=; Path=/; Max-Age=0'
     } catch {}
   }
 }

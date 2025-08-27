@@ -37,6 +37,71 @@ export class AdminService {
     return Math.min(10000, Math.max(1000, Number.isFinite(n) ? n : 3000));
   }
 
+  // Plan normalization and aliases
+  private _planAliasMap: Record<string, string> | null = null;
+  private buildPlanAliasMap() {
+    if (this._planAliasMap) return this._planAliasMap;
+    const map: Record<string, string> = {};
+    // Built-in defaults
+    (
+      [
+        ["pro monthly", "Pro Monthly"],
+        ["promonthly", "Pro Monthly"],
+        ["pro_monthly", "Pro Monthly"],
+        ["pro-monthly", "Pro Monthly"],
+        ["monthly", "Pro Monthly"],
+        ["month", "Pro Monthly"],
+        ["pro m", "Pro Monthly"],
+        ["pro annual", "Pro Annual"],
+        ["pro yearly", "Pro Annual"],
+        ["annual", "Pro Annual"],
+        ["yearly", "Pro Annual"],
+        ["pro_annual", "Pro Annual"],
+        ["pro-annually", "Pro Annual"],
+        ["pro-yearly", "Pro Annual"],
+        ["year", "Pro Annual"],
+      ] as Array<[string, string]>
+    ).forEach(([k, v]) => {
+      map[String(k).trim().toLowerCase()] = v as string;
+    });
+    // Env-driven overrides
+    const raw = process.env.ADMIN_PLAN_ALIASES_JSON;
+    if (raw && raw.trim()) {
+      try {
+        const obj = JSON.parse(raw) as Record<string, unknown>;
+        Object.entries(obj).forEach(([k, v]) => {
+          if (typeof v === "string") {
+            map[String(k).trim().toLowerCase()] = v;
+          }
+        });
+      } catch {
+        // ignore parse errors
+      }
+    }
+    this._planAliasMap = map;
+    return map;
+  }
+  private normalizePlanLabel(plan?: string) {
+    if (!plan) return undefined;
+    const raw = String(plan).trim();
+    if (!raw) return undefined;
+    const k = raw.toLowerCase();
+    const map = this.buildPlanAliasMap();
+    const canonical = map[k];
+    if (canonical) return canonical;
+    if (raw === "Pro Monthly" || raw === "Pro Annual") return raw;
+    return raw;
+  }
+  private planSynonyms(canonical: string) {
+    const c = String(canonical ?? "").trim();
+    if (!c) return [] as string[];
+    const map = this.buildPlanAliasMap();
+    const keys = Object.entries(map)
+      .filter(([, v]) => v === c)
+      .map(([k]) => k);
+    return Array.from(new Set<string>([c, ...keys]));
+  }
+
   // Access control for admin-only operations
   private checkAdminRole(role: UserRole) {
     if (role !== "ADMIN") {
@@ -993,20 +1058,39 @@ export class AdminService {
       statusFilter = map[status.toLowerCase() as keyof typeof map];
     }
 
+    const normPlan = this.normalizePlanLabel(plan);
     const where: Prisma.TransactionWhereInput = {};
-    if (plan && plan !== "all") where.plan = plan;
+    if (normPlan && plan && plan !== "all") {
+      const synonyms = this.planSynonyms(normPlan);
+      if (synonyms.length <= 1) {
+        where.plan = {
+          equals: synonyms[0] ?? normPlan,
+          mode: "insensitive",
+        } as Prisma.StringFilter;
+      } else {
+        (where.AND ||= []);
+        (where.AND as Prisma.TransactionWhereInput[]).push({
+          OR: synonyms.map((v) => ({
+            plan: { equals: v, mode: "insensitive" },
+          })),
+        });
+      }
+    }
     if (statusFilter) where.status = statusFilter;
     if (q && q.trim()) {
       const term = q.trim();
-      where.OR = [
-        { id: { contains: term, mode: "insensitive" } },
-        { user: { is: { email: { contains: term, mode: "insensitive" } } } },
-        { user: { is: { username: { contains: term, mode: "insensitive" } } } },
-      ];
+      (where.AND ||= []);
+      (where.AND as Prisma.TransactionWhereInput[]).push({
+        OR: [
+          { id: { contains: term, mode: "insensitive" } },
+          { user: { is: { email: { contains: term, mode: "insensitive" } } } },
+          { user: { is: { username: { contains: term, mode: "insensitive" } } } },
+        ],
+      });
     }
 
     // Request-level cache + in-flight dedupe to reduce DB pressure under bursty traffic
-    const cacheKey = `tx:${JSON.stringify({ limit, offset, status: statusFilter ?? null, plan: plan ?? null, q: (q || "").trim().toLowerCase() })}`;
+    const cacheKey = `tx:${JSON.stringify({ limit, offset, status: statusFilter ?? null, plan: normPlan ?? null, q: (q || "").trim().toLowerCase() })}`;
     const now = Date.now();
     const cached = this.txCache.get(cacheKey);
     if (cached && cached.expiresAt > now) {
@@ -1039,7 +1123,7 @@ export class AdminService {
           userId: t.userId,
           email: t.user?.email ?? "",
           username: t.user?.username ?? "",
-          plan: t.plan,
+          plan: this.normalizePlanLabel(t.plan) ?? t.plan,
           amount: Number(String(t.amount ?? "0")),
           currency: t.currency,
           status: String(t.status).toLowerCase(),
@@ -1081,16 +1165,35 @@ export class AdminService {
       statusFilter = map[status.toLowerCase() as keyof typeof map];
     }
 
+    const normPlan = this.normalizePlanLabel(plan);
     const where: Prisma.TransactionWhereInput = {};
-    if (plan && plan !== "all") where.plan = plan;
+    if (normPlan && plan && plan !== "all") {
+      const synonyms = this.planSynonyms(normPlan);
+      if (synonyms.length <= 1) {
+        where.plan = {
+          equals: synonyms[0] ?? normPlan,
+          mode: "insensitive",
+        } as Prisma.StringFilter;
+      } else {
+        (where.AND ||= []);
+        (where.AND as Prisma.TransactionWhereInput[]).push({
+          OR: synonyms.map((v) => ({
+            plan: { equals: v, mode: "insensitive" },
+          })),
+        });
+      }
+    }
     if (statusFilter) where.status = statusFilter;
     if (q && q.trim()) {
       const term = q.trim();
-      where.OR = [
-        { id: { contains: term, mode: "insensitive" } },
-        { user: { is: { email: { contains: term, mode: "insensitive" } } } },
-        { user: { is: { username: { contains: term, mode: "insensitive" } } } },
-      ];
+      (where.AND ||= []);
+      (where.AND as Prisma.TransactionWhereInput[]).push({
+        OR: [
+          { id: { contains: term, mode: "insensitive" } },
+          { user: { is: { email: { contains: term, mode: "insensitive" } } } },
+          { user: { is: { username: { contains: term, mode: "insensitive" } } } },
+        ],
+      });
     }
 
     const records = await this.prisma.transaction.findMany({
@@ -1117,7 +1220,7 @@ export class AdminService {
       t.userId,
       t.user?.email ?? "",
       t.user?.username ?? "",
-      t.plan,
+      this.normalizePlanLabel(t.plan) ?? t.plan,
       Number(String(t.amount ?? "0")).toFixed(2),
       t.currency,
       String(t.status).toLowerCase(),

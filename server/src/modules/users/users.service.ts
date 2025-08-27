@@ -107,7 +107,18 @@ export class UsersService {
 
   async upgradeToPro(userId: string, duration: string) {
     const durationDays = duration === "yearly" ? 365 : 30;
-    const expiresAt = new Date();
+
+    // Extend from current expiration if the user is already Pro and not expired.
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { proExpiresAt: true },
+    });
+    const now = new Date();
+    const base =
+      current?.proExpiresAt && current.proExpiresAt > now
+        ? new Date(current.proExpiresAt)
+        : now;
+    const expiresAt = new Date(base.getTime());
     expiresAt.setDate(expiresAt.getDate() + durationDays);
 
     return this.prisma.user.update({

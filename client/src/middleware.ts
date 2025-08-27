@@ -1,24 +1,74 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// This middleware handles route protection based on authentication
-// Note: Since we use localStorage for auth state, we can't access it in middleware
-// The actual role-based protection happens client-side
+// Strict server-side auth/role enforcement using a JWT token mirrored into a cookie
 export function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname
-  
-  // Skip middleware for API routes and static files
-  if (
-    pathname.startsWith('/api') ||
+  const { nextUrl } = request
+  const pathname = nextUrl.pathname
+
+  // Public routes (let through)
+  const isPublic = (
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/maintenance') ||
     pathname.startsWith('/_next') ||
-    pathname === '/favicon.ico'
-  ) {
+    pathname.startsWith('/api') ||
+    pathname === '/favicon.ico' ||
+    pathname.startsWith('/public')
+  )
+  if (isPublic) return NextResponse.next()
+
+  // Helpers
+  const redirectToLogin = () => {
+    const url = new URL('/login', request.url)
+    // Preserve intended target
+    const nextParam = pathname + (nextUrl.search || '')
+    url.searchParams.set('next', nextParam)
+    return NextResponse.redirect(url)
+  }
+
+  const decodeJwt = (token: string): Record<string, any> | null => {
+    try {
+      const parts = token.split('.')
+      if (parts.length < 2) return null
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+      const pad = '='.repeat((4 - (b64.length % 4)) % 4)
+      const json = atob(b64 + pad)
+      return JSON.parse(json) as Record<string, any>
+    } catch {
+      return null
+    }
+  }
+
+  const cookieToken = request.cookies.get('taskzen_token')?.value || ''
+  const payload = cookieToken ? decodeJwt(cookieToken) : null
+  const isExpired = (() => {
+    if (!payload || !payload.exp) return true
+    try {
+      const nowSec = Math.floor(Date.now() / 1000)
+      return Number(payload.exp) <= nowSec
+    } catch {
+      return true
+    }
+  })()
+  const isAuthenticated = !!payload && !isExpired
+  const role = (payload?.role as string | undefined) || ''
+
+  // Admin-only section
+  if (pathname.startsWith('/admin')) {
+    if (!isAuthenticated) return redirectToLogin()
+    if (role !== 'ADMIN') return redirectToLogin()
     return NextResponse.next()
   }
 
-  // For now, allow all requests to pass through
-  // The actual authentication and role checking happens client-side
-  // This is because Next.js middleware runs on the server and can't access localStorage
+  // Authenticated-only settings section
+  if (pathname.startsWith('/settings')) {
+    if (!isAuthenticated) return redirectToLogin()
+    return NextResponse.next()
+  }
+
+  // Default allow
   return NextResponse.next()
 }
 
