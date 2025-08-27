@@ -19,10 +19,14 @@ import { CsrfGuard } from "../../common/guards/csrf.guard";
 import { Response } from "express";
 import { FeatureFlag } from "../../common/decorators/feature-flag.decorator";
 import { Throttle } from "@nestjs/throttler";
+import { UsersService } from "../users/users.service";
 
 @Controller("auth")
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @UseGuards(CsrfGuard)
   @Throttle({ default: { limit: 5, ttl: 900 } })
@@ -68,21 +72,23 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get("me")
   async getProfile(@Request() req) {
-    return req.user;
+    // Always return a fresh user snapshot from the DB so fields like isPro/proExpiresAt are accurate
+    return this.usersService.findById(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post("refresh")
   async refresh(@Request() req) {
-    // Return a new token with the same payload
+    // Return a new token using a fresh user snapshot so role/isActive/email are up-to-date
+    const user = await this.usersService.findById(req.user.id);
     const payload = {
-      email: req.user.email,
-      sub: req.user.id,
-      role: req.user.role,
-      isActive: req.user.isActive,
+      email: user.email,
+      sub: user.id,
+      role: user.role,
+      isActive: user.isActive,
     };
     return {
-      user: req.user,
+      user,
       token: await this.authService.generateToken(payload),
     };
   }
