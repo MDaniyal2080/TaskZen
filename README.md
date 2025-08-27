@@ -58,3 +58,17 @@ npm run start:dev
 npm run dev
 ```
 
+## Production Deployment
+
+See detailed guides and environment templates under `docs/`:
+
+- `docs/DEPLOYMENT.md` — step-by-step production setup (Neon + Railway + Netlify)
+- `docs/env/ENV.server.production.example.md` — server (Railway) env template
+- `docs/env/ENV.client.production.example.md` — client (Netlify) env template
+- `docs/SMOKE_TESTS.md` — post-deploy validation steps
+
+Key production endpoints:
+
+- API base prefix: `/api/v1`
+- Health check: `/api/v1/health`
+- WebSocket namespace: `/realtime` (path `/socket.io`)
