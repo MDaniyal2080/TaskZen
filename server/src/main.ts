@@ -14,7 +14,7 @@ import {
 import { GlobalExceptionFilter } from "./common/filters/global-exception.filter";
 import { SanitizationPipe } from "./common/pipes/sanitization.pipe";
 import { NestExpressApplication } from "@nestjs/platform-express";
-import { join } from "path";
+import { join, isAbsolute } from "path";
 import { PrismaService } from "./database/prisma.service";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 
@@ -77,14 +77,21 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalExceptionFilter());
 
   // Serve static files for uploads
-  const uploadPath = configService.get("UPLOAD_PATH", "uploads");
-  app.useStaticAssets(join(process.cwd(), uploadPath), {
+  const uploadPathEnv =
+    (configService.get<string>("UPLOAD_PATH") as string | undefined) ||
+    (configService.get<string>("UPLOAD_DIR") as string | undefined) ||
+    "uploads";
+  const uploadAbsPath = isAbsolute(uploadPathEnv)
+    ? uploadPathEnv
+    : join(process.cwd(), uploadPathEnv);
+  app.useStaticAssets(uploadAbsPath, {
     prefix: "/uploads/",
     setHeaders: (res) => {
       // Cache uploaded assets for 1 hour; adjust via CDN if fronted
       res.setHeader("Cache-Control", "public, max-age=3600, immutable");
     },
   });
+  Logger.log(`📁 Serving uploads from ${uploadAbsPath} at /uploads/`, "Bootstrap");
 
   // Global prefix
   app.setGlobalPrefix("api/v1");

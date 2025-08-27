@@ -90,6 +90,7 @@ model BoardMember {
   board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
 
   @@unique([userId, boardId])
+  @@index([boardId])
   @@map("board_members")
 }
 
@@ -155,6 +156,7 @@ model Label {
   cards   CardLabel[]
 
   @@unique([name, boardId])
+  @@index([boardId])
   @@map("labels")
 }
 
@@ -180,7 +182,7 @@ model Attachment {
   // Relations
   cardId String
   card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
-
+  @@index([cardId])
   @@map("attachments")
 }
 
@@ -210,7 +212,7 @@ model Comment {
   authorId String
   card     Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
+  @@index([cardId, createdAt])
   @@map("comments")
 }
 
