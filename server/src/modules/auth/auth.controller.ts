@@ -20,6 +20,7 @@ import { Response } from "express";
 import { FeatureFlag } from "../../common/decorators/feature-flag.decorator";
 import { Throttle } from "@nestjs/throttler";
 import { UsersService } from "../users/users.service";
+import { ChangePasswordDto } from "../users/dto/change-password.dto";
 
 @Controller("auth")
 export class AuthController {
@@ -91,5 +92,16 @@ export class AuthController {
       user,
       token: await this.authService.generateToken(payload),
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post("change-password")
+  async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+    await this.usersService.changePassword(
+      req.user.id,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    return { success: true, message: "Password updated successfully" };
   }
 }

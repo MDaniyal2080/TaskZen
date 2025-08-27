@@ -55,10 +55,22 @@ export class UsersController {
     return req.user;
   }
 
-  @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.usersService.findById(id);
+  @Patch("profile")
+  async updateMyProfile(@Body() body: any, @Request() req) {
+    // Accept client payload but only persist supported fields
+    const { firstName, lastName } = body ?? {};
+    const payload: UpdateUserDto = {} as UpdateUserDto;
+    if (typeof firstName === "string") payload.firstName = firstName;
+    if (typeof lastName === "string") payload.lastName = lastName;
+
+    if (Object.keys(payload).length === 0) {
+      // Nothing to update; return a fresh snapshot
+      return this.usersService.findById(req.user.id);
+    }
+    return this.usersService.update(req.user.id, payload);
   }
+
+  
 
   @Get(":id/notifications")
   async getNotifications(@Param("id") id: string, @Request() req) {
@@ -86,6 +98,39 @@ export class UsersController {
     ) as Record<string, any>;
     const merged = { ...safeCurrent, ...(dto as any) };
     return this.usersService.updateNotificationPreferences(id, merged);
+  }
+
+  @Get("notifications")
+  async getMyNotifications(@Request() req) {
+    return this.usersService.getNotificationPreferences(req.user.id);
+  }
+
+  @Patch("notifications")
+  async updateMyNotifications(@Body() body: any, @Request() req) {
+    // Normalize client keys to server-side canonical keys
+    const incoming = (body as Record<string, any>) || {};
+    const normalized: Record<string, any> = { ...incoming };
+    if ("taskComments" in incoming) {
+      normalized.comments = !!incoming.taskComments;
+      delete (normalized as any).taskComments;
+    }
+    if ("taskDueDates" in incoming) {
+      normalized.taskDeadlines = !!incoming.taskDueDates;
+      delete (normalized as any).taskDueDates;
+    }
+    if ("weeklyDigest" in incoming) {
+      normalized.weeklyReport = !!incoming.weeklyDigest;
+      delete (normalized as any).weeklyDigest;
+    }
+
+    const current = await this.usersService.getNotificationPreferences(
+      req.user.id,
+    );
+    const safeCurrent = (
+      typeof current === "object" && current !== null ? current : {}
+    ) as Record<string, any>;
+    const merged = { ...safeCurrent, ...normalized };
+    return this.usersService.updateNotificationPreferences(req.user.id, merged);
   }
 
   @Get(":id/ui-preferences")
@@ -118,6 +163,37 @@ export class UsersController {
       },
     };
     return this.usersService.updateUiPreferences(id, merged);
+  }
+
+  @Get("preferences")
+  async getMyPreferences(@Request() req) {
+    return this.usersService.getUiPreferences(req.user.id);
+  }
+
+  @Patch("preferences")
+  async updateMyPreferences(@Body() body: any, @Request() req) {
+    const current = await this.usersService.getUiPreferences(req.user.id);
+    const safeCurrent = (
+      typeof current === "object" && current !== null ? current : {}
+    ) as Record<string, any>;
+    const incoming = (body as Record<string, any>) || {};
+
+    const merged: Record<string, any> = {
+      ...safeCurrent,
+      board: { ...(((safeCurrent as any)?.board) || {}) },
+    };
+    if (typeof incoming.theme === "string") merged.theme = incoming.theme;
+    if (typeof incoming.language === "string")
+      merged.language = incoming.language;
+    if (typeof incoming.timezone === "string")
+      merged.timezone = incoming.timezone;
+
+    return this.usersService.updateUiPreferences(req.user.id, merged);
+  }
+
+  @Get(":id")
+  findOne(@Param("id") id: string) {
+    return this.usersService.findById(id);
   }
 
   @UseGuards(JwtAuthGuard)
