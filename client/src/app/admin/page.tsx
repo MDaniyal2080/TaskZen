@@ -194,9 +194,9 @@ export default function AdminDashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
+            <div className="text-2xl font-bold">{stats?.users?.total ?? 0}</div>
             <p className="text-xs text-muted-foreground">
-              {stats?.activeUsers || 0} active
+              {stats?.users?.active ?? 0} active
             </p>
           </CardContent>
         </Card>
@@ -206,7 +206,7 @@ export default function AdminDashboardPage() {
             <Layout className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalBoards || 0}</div>
+            <div className="text-2xl font-bold">{stats?.boards?.total ?? 0}</div>
             <p className="text-xs text-muted-foreground">
               {analyticsQuery.data?.boardMetrics?.avgCardsPerBoard?.toFixed(1) || 0} avg cards/board
             </p>
@@ -218,7 +218,7 @@ export default function AdminDashboardPage() {
             <ListTodo className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsQuery.data?.taskMetrics?.overview?.total || stats?.totalTasks || 0}</div>
+            <div className="text-2xl font-bold">{analyticsQuery.data?.taskMetrics?.overview?.total || stats?.tasks?.total || 0}</div>
             <p className="text-xs text-muted-foreground">
               {analyticsQuery.data?.taskMetrics?.overview?.completed || 0} completed
             </p>
@@ -230,10 +230,7 @@ export default function AdminDashboardPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.proUsers || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.adminUsers || 0} admins
-            </p>
+            <div className="text-2xl font-bold">{stats?.users?.pro ?? 0}</div>
           </CardContent>
         </Card>
         <Card>

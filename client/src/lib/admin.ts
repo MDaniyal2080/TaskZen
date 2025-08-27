@@ -1,14 +1,40 @@
 import { api } from './api'
 
 export type AdminStats = {
-  totalUsers: number
-  totalBoards: number
-  totalCards: number
-  totalTasks: number
-  activeUsers: number
-  inactiveUsers: number
-  proUsers: number
-  adminUsers: number
+  users: {
+    total: number
+    active: number
+    pro: number
+  }
+  boards: {
+    total: number
+    archived: number
+  }
+  tasks: {
+    total: number
+    completed: number
+    overdue: number
+  }
+  revenue: {
+    mrr: number
+    arr: number
+  }
+  recent: {
+    users: {
+      id: string
+      email: string
+      username: string
+      createdAt: string
+      isActive: boolean
+      isPro: boolean
+    }[]
+    boards: {
+      id: string
+      title: string
+      createdAt: string
+      isArchived: boolean
+    }[]
+  }
 }
 
 export type AdminUser = {

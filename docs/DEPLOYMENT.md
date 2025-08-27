@@ -49,6 +49,30 @@ This guide prepares TaskZen for a secure, reliable production launch.
   - API prefix is `/api/v1`
   - Socket.IO namespace is `/realtime` (path `/socket.io`)
   - If scaling to multiple instances, add a Socket.IO Redis adapter first. Until then, keep replicas=1.
+  - Healthcheck: set Railway Healthcheck Path to `/api/v1/health` for accurate container health reporting.
+  - Proxies: app trusts `X-Forwarded-*` headers in production; no extra config needed.
+  
+  ### WebSocket connection/auth details
+  - Base URL: set `NEXT_PUBLIC_WS_URL` to your backend origin with `/realtime` (e.g., `https://<railway>/realtime`). The client ensures the `/realtime` suffix if missing.
+  - Path: Socket.IO path is `/socket.io`.
+  - Allowed origins: CORS/WS allowlist comes from `FRONTEND_URL` and `CLIENT_URL` envs.
+  - Authentication tokens accepted by the server (`server/src/modules/auth/guards/ws-jwt.guard.ts`):
+    - `handshake.auth.token` (preferred)
+    - `?token=...` query parameter
+    - `Authorization: Bearer <JWT>` header
+  - The client (`client/src/store/socket-store.ts`) sends the JWT in both `auth` and `query`, sets `withCredentials: true`, `path: '/socket.io'`, and uses transports `['polling','websocket']`.
+  - Example:
+    ```js
+    import { io } from 'socket.io-client';
+    const token = '<JWT>';
+    const socket = io('https://<railway>/realtime', {
+      path: '/socket.io',
+      withCredentials: true,
+      auth: { token },
+      query: { token },
+      transports: ['polling','websocket'],
+    });
+    ```
 
 ## 4) Netlify (Frontend)
 - Site settings → Environment:
@@ -59,6 +83,11 @@ This guide prepares TaskZen for a secure, reliable production launch.
   - Build command: `npm run build`
   - Publish: `.next` (auto-detected by Netlify for Next.js)
 - Use the final Netlify URL for `FRONTEND_URL` and `CLIENT_URL` on the server.
+  
+  Security headers and rewrites (already configured in `client/next.config.js`):
+  - Security headers sent on all routes: `X-Content-Type-Options=nosniff`, `X-Frame-Options=DENY`, `Referrer-Policy=no-referrer`. In production only, `Strict-Transport-Security: max-age=31536000; includeSubDomains`.
+  - Rewrites: `/api/v1/*` and `/uploads/*` are proxied to your backend origin. The origin is inferred from `NEXT_PUBLIC_API_URL` (or `NEXT_PUBLIC_WS_URL` fallback), so keep those envs accurate.
+  - Images: allowed domains include `localhost` and `res.cloudinary.com`. If you use S3, add your bucket domain to `images.domains`.
 
 ## 5) Post-deploy smoke tests
 See `docs/SMOKE_TESTS.md` for detailed steps:
@@ -76,8 +105,89 @@ See `docs/SMOKE_TESTS.md` for detailed steps:
 - Consider Redis for cache and Socket.IO adapter when scaling
 - Prefer S3 for file uploads over ephemeral disk
 
-## 7) Troubleshooting
+## 7) CI/CD (GitHub Actions)
+- Connect your GitHub repository to both Railway (server) and Netlify (client) for auto-deploys on push to `main`.
+- Optional: add a CI workflow to lint/build both apps before the platforms deploy.
+
+Example GitHub Actions workflow (save as `.github/workflows/ci.yml`):
+
+```yaml
+name: CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install client deps
+        run: npm ci
+        working-directory: client
+      - name: Install server deps
+        run: npm ci
+        working-directory: server
+      - name: Lint client
+        run: npm run lint
+        working-directory: client
+      - name: Lint server
+        run: npm run lint
+        working-directory: server
+      - name: Build client
+        run: npm run build
+        working-directory: client
+      - name: Build server
+        run: npm run build
+        working-directory: server
+```
+
+Note: Railway and Netlify will still perform their own builds/deploys. This CI is for fast feedback.
+
+## 8) Custom domains and SSL
+- Netlify (frontend): add your custom domain in Site settings → Domain management. Ensure HTTPS is enabled.
+- Railway (backend): add a custom domain (optional). If you do, update Netlify env:
+  - `NEXT_PUBLIC_API_URL=https://<your-backend-domain>/api/v1`
+  - `NEXT_PUBLIC_WS_URL=https://<your-backend-domain>/realtime`
+- Update server env to match the final frontend origin exactly (no trailing slash):
+  - `FRONTEND_URL=https://<your-frontend-domain>`
+  - `CLIENT_URL=https://<your-frontend-domain>`
+ - SSL: both Netlify and Railway auto-provision TLS certs for managed/custom domains. Allow some minutes for DNS + cert issuance.
+
+## 9) Prisma migrations in production
+- Application uses pooled `DATABASE_URL` and runs with PgBouncer; migrations should use `DATABASE_URL_UNPOOLED`.
+- In Railway, the start process (see section above) should run `prisma migrate deploy` against the unpooled URL before starting the app.
+- Never run `prisma migrate reset` in production. Use `migrate deploy` with committed migrations.
+
+## 10) Monitoring and logging
+- Check Railway logs for the API (watch for Prisma slow query warnings >500ms).
+- Check Netlify deploy and function logs for the frontend.
+- Add uptime checks for:
+  - Backend health endpoint: `GET /api/v1/health` (returns 200 + JSON)
+  - Frontend Netlify site URL
+- Consider structured logging and an external log sink (e.g., Logtail, Datadog) as you scale.
+
+## 11) Rollback strategy
+- Railway: redeploy a previous successful build from the Deployments tab.
+- Netlify: use Instant Rollback to restore a prior deploy for the site.
+- Keep DB migrations backward-compatible when possible to simplify rollbacks.
+
+## 12) Troubleshooting
 - CORS/WS failures: confirm `FRONTEND_URL`/`CLIENT_URL` match your Netlify site (https; no trailing slash)
 - 503/maintenance: check System Settings feature flags and `SETTINGS_FETCH_TIMEOUT_MS`
 - Slow DB queries: inspect Railway logs (Prisma outputs >500ms warnings), add indexes if needed
 - WebSocket not cross-instance: ensure only one replica or add Redis adapter
+ - WebSocket handshake failures:
+   - Ensure `NEXT_PUBLIC_WS_URL` points to your backend origin using https and the `/realtime` namespace.
+   - Verify CORS allowlist on server matches your exact frontend origin.
+   - If using a custom backend domain, update both `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL`.
++  - Emergency degraded boot: if `ALLOW_BOOT_WITHOUT_DB=true` is set, check that it's disabled after use; not recommended for normal production.
+
+## 13) Appendix: Environment variables reference
+- Server (Railway) production example: `docs/env/ENV.server.production.example.md`
+- Client (Netlify) production example: `docs/env/ENV.client.production.example.md`
