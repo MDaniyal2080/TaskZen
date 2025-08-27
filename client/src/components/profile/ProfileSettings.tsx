@@ -130,9 +130,7 @@ export function ProfileSettings() {
 
     setLoading(true);
     try {
-      const response = await api.post('/users/avatar', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const response = await api.post('/users/avatar', formData);
       
       setUser(response.data);
       setProfileData(prev => ({ ...prev, avatar: response.data.avatar }));

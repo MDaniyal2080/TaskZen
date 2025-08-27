@@ -162,12 +162,27 @@ export class UsersController {
       }),
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB (align with client)
       fileFilter: (req, file, cb) => {
-        const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-        if (allowed.includes(file.mimetype)) {
+        const allowedMimes = [
+          "image/jpeg",
+          "image/jpg",
+          "image/pjpeg",
+          "image/png",
+          "image/x-png",
+          "image/gif",
+          "image/webp",
+          "image/avif",
+        ];
+        const allowedExts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"];
+        const mime = (file.mimetype || "").toLowerCase();
+        const ext = extname(file.originalname || "").toLowerCase();
+        const mimeOk = !!mime && allowedMimes.includes(mime);
+        const extOk = !!ext && allowedExts.includes(ext);
+        if (mimeOk || extOk) {
           return cb(null, true);
         }
         // Do not throw from fileFilter to avoid aborting the stream (causes ECONNRESET)
-        (req as any).fileValidationError = "Only image files are allowed";
+        (req as any).fileValidationError =
+          "Only image files are allowed (jpeg, png, gif, webp, avif)";
         return cb(null, false);
       },
     }),
@@ -202,11 +217,26 @@ export class UsersController {
       }),
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB (align with client)
       fileFilter: (req, file, cb) => {
-        const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-        if (allowed.includes(file.mimetype)) {
+        const allowedMimes = [
+          "image/jpeg",
+          "image/jpg",
+          "image/pjpeg",
+          "image/png",
+          "image/x-png",
+          "image/gif",
+          "image/webp",
+          "image/avif",
+        ];
+        const allowedExts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"];
+        const mime = (file.mimetype || "").toLowerCase();
+        const ext = extname(file.originalname || "").toLowerCase();
+        const mimeOk = !!mime && allowedMimes.includes(mime);
+        const extOk = !!ext && allowedExts.includes(ext);
+        if (mimeOk || extOk) {
           return cb(null, true);
         }
-        (req as any).fileValidationError = "Only image files are allowed";
+        (req as any).fileValidationError =
+          "Only image files are allowed (jpeg, png, gif, webp, avif)";
         return cb(null, false);
       },
     }),
