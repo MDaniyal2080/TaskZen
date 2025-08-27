@@ -6,101 +6,106 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  username    String   @unique
-  firstName   String?
-  lastName    String?
-  avatar      String?
-  password    String
-  role        UserRole @default(USER)
-  isPro       Boolean  @default(false)
-  proExpiresAt DateTime?
-  isActive    Boolean  @default(true)
+  id                      String    @id @default(cuid())
+  email                   String    @unique
+  username                String    @unique
+  firstName               String?
+  lastName                String?
+  avatar                  String?
+  password                String
+  role                    UserRole  @default(USER)
+  isPro                   Boolean   @default(false)
+  proExpiresAt            DateTime?
+  isActive                Boolean   @default(true)
   notificationPreferences Json?
   uiPreferences           Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
   // Relations
-  boards      Board[]
-  boardMembers BoardMember[]
-  cards       Card[]
-  comments    Comment[]
-  activities  Activity[]
-  templates   BoardTemplate[]
-  reportedContent ContentReport[] @relation("Reporter")
-  reportedAsUser ContentReport[] @relation("ReportedUser")
-  reviewedReports ContentReport[] @relation("Reviewer")
-  violations  Violation[]
+  boards                    Board[]
+  boardMembers              BoardMember[]
+  cards                     Card[]
+  comments                  Comment[]
+  activities                Activity[]
+  templates                 BoardTemplate[]
+  reportedContent           ContentReport[]    @relation("Reporter")
+  reportedAsUser            ContentReport[]    @relation("ReportedUser")
+  reviewedReports           ContentReport[]    @relation("Reviewer")
+  violations                Violation[]
   targetedModerationActions ModerationAction[] @relation("TargetUser")
-  moderatorActions ModerationAction[] @relation("Moderator")
-  transactions Transaction[]
-  systemSettingsUpdates SystemSettings[]
-  analyticsEvents AnalyticsEvent[]
-  sessions   UserSession[]
-  
+  moderatorActions          ModerationAction[] @relation("Moderator")
+  transactions              Transaction[]
+  systemSettingsUpdates     SystemSettings[]
+  analyticsEvents           AnalyticsEvent[]
+  sessions                  UserSession[]
+
+  @@index([createdAt])
+  @@index([isActive])
+  @@index([isPro])
   @@map("users")
 }
 
 model Board {
-  id          String      @id @default(cuid())
+  id          String   @id @default(cuid())
   title       String
   description String?
-  color       String      @default("#6366f1")
-  background  String?     // Background image URL or theme name
-  theme       String      @default("default") // Theme preset name
-  isPrivate   Boolean     @default(false)
-  isArchived  Boolean     @default(false)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
+  color       String   @default("#6366f1")
+  background  String? // Background image URL or theme name
+  theme       String   @default("default") // Theme preset name
+  isPrivate   Boolean  @default(false)
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   // Relations
-  ownerId     String
-  owner       User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  members     BoardMember[]
-  lists       List[]
-  activities  Activity[]
-  labels      Label[]
+  ownerId         String
+  owner           User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members         BoardMember[]
+  lists           List[]
+  activities      Activity[]
+  labels          Label[]
   analyticsEvents AnalyticsEvent[]
-  
+
+  @@index([createdAt])
+  @@index([isArchived])
   @@map("boards")
 }
 
 model BoardMember {
-  id        String           @id @default(cuid())
-  role      BoardMemberRole  @default(MEMBER)
-  joinedAt  DateTime         @default(now())
-  
+  id       String          @id @default(cuid())
+  role     BoardMemberRole @default(MEMBER)
+  joinedAt DateTime        @default(now())
+
   // Relations
-  userId    String
-  boardId   String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  board     Board            @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  
+  userId  String
+  boardId String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
   @@unique([userId, boardId])
   @@map("board_members")
 }
 
 model List {
-  id        String   @id @default(cuid())
-  title     String
-  position  Float
-  isArchived Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
+  id         String   @id @default(cuid())
+  title      String
+  position   Float
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
   // Relations
-  boardId   String
-  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  cards     Card[]
-  
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards   Card[]
+
   @@index([boardId, position])
   @@map("lists")
 }
@@ -117,20 +122,24 @@ model Card {
   color       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  
+
   // Relations
-  listId      String
-  assigneeId  String?
-  list        List      @relation(fields: [listId], references: [id], onDelete: Cascade)
-  assignee    User?     @relation(fields: [assigneeId], references: [id])
-  labels      CardLabel[]
-  attachments Attachment[]
-  checklistItems ChecklistItem[]
-  comments    Comment[]
-  activities  Activity[]
+  listId          String
+  assigneeId      String?
+  list            List             @relation(fields: [listId], references: [id], onDelete: Cascade)
+  assignee        User?            @relation(fields: [assigneeId], references: [id])
+  labels          CardLabel[]
+  attachments     Attachment[]
+  checklistItems  ChecklistItem[]
+  comments        Comment[]
+  activities      Activity[]
   analyticsEvents AnalyticsEvent[]
-  
+
   @@index([listId, position])
+  @@index([createdAt])
+  @@index([isCompleted])
+  @@index([isCompleted, createdAt])
+  @@index([isCompleted, dueDate])
   @@map("cards")
 }
 
@@ -139,12 +148,12 @@ model Label {
   name      String
   color     String
   createdAt DateTime @default(now())
-  
+
   // Relations
-  boardId   String
-  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  cards     CardLabel[]
-  
+  boardId String
+  board   Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards   CardLabel[]
+
   @@unique([name, boardId])
   @@map("labels")
 }
@@ -154,24 +163,24 @@ model CardLabel {
   labelId String
   card    Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
   label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
-  
+
   @@id([cardId, labelId])
   @@map("card_labels")
 }
 
 model Attachment {
-  id        String   @id @default(cuid())
-  filename  String
+  id           String   @id @default(cuid())
+  filename     String
   originalName String
-  mimeType  String
-  size      Int
-  url       String
-  createdAt DateTime @default(now())
-  
+  mimeType     String
+  size         Int
+  url          String
+  createdAt    DateTime @default(now())
+
   // Relations
-  cardId    String
-  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
   @@map("attachments")
 }
 
@@ -183,8 +192,8 @@ model ChecklistItem {
   createdAt   DateTime @default(now())
 
   // Relations
-  cardId      String
-  card        Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@index([cardId, position])
   @@map("checklist_items")
@@ -195,13 +204,13 @@ model Comment {
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   // Relations
-  cardId    String
-  authorId  String
-  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  
+  cardId   String
+  authorId String
+  card     Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
   @@map("comments")
 }
 
@@ -210,16 +219,17 @@ model Activity {
   type      ActivityType
   data      Json
   createdAt DateTime     @default(now())
-  
+
   // Relations
-  userId    String?
-  boardId   String?
-  cardId    String?
-  user      User?        @relation(fields: [userId], references: [id])
-  board     Board?       @relation(fields: [boardId], references: [id])
-  card      Card?        @relation(fields: [cardId], references: [id])
-  
+  userId  String?
+  boardId String?
+  cardId  String?
+  user    User?   @relation(fields: [userId], references: [id])
+  board   Board?  @relation(fields: [boardId], references: [id])
+  card    Card?   @relation(fields: [cardId], references: [id])
+
   @@index([boardId, createdAt])
+  @@index([createdAt])
   @@map("activities")
 }
 
@@ -234,79 +244,79 @@ model BoardTemplate {
   createdAt   DateTime @default(now())
 
   // Relations
-  ownerId     String
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@map("board_templates")
 }
 
 // Content Moderation Models
 model ContentReport {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   contentType ContentType
-  contentId   String   // ID of the reported content (board, card, or comment)
+  contentId   String // ID of the reported content (board, card, or comment)
   reason      ReportReason
   description String?
-  status      ReportStatus @default(PENDING)
+  status      ReportStatus   @default(PENDING)
   priority    ReportPriority @default(MEDIUM)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime       @default(now())
   reviewedAt  DateTime?
   resolvedAt  DateTime?
-  
+
   // Relations
-  reporterId  String
-  reportedUserId String?
-  reviewedById String?
-  reporter    User     @relation("Reporter", fields: [reporterId], references: [id])
-  reportedUser User?   @relation("ReportedUser", fields: [reportedUserId], references: [id])
-  reviewedBy  User?    @relation("Reviewer", fields: [reviewedById], references: [id])
-  violations  Violation[]
+  reporterId        String
+  reportedUserId    String?
+  reviewedById      String?
+  reporter          User               @relation("Reporter", fields: [reporterId], references: [id])
+  reportedUser      User?              @relation("ReportedUser", fields: [reportedUserId], references: [id])
+  reviewedBy        User?              @relation("Reviewer", fields: [reviewedById], references: [id])
+  violations        Violation[]
   moderationActions ModerationAction[]
-  
+
   @@index([status, priority])
   @@index([contentType, contentId])
   @@map("content_reports")
 }
 
 model Violation {
-  id          String   @id @default(cuid())
+  id          String            @id @default(cuid())
   type        ViolationType
   severity    ViolationSeverity
   description String
-  evidence    Json?    // Screenshots, logs, etc.
-  createdAt   DateTime @default(now())
+  evidence    Json? // Screenshots, logs, etc.
+  createdAt   DateTime          @default(now())
   expiresAt   DateTime?
-  
+
   // Relations
-  userId      String
-  reportId    String?
-  user        User     @relation(fields: [userId], references: [id])
-  report      ContentReport? @relation(fields: [reportId], references: [id])
-  actions     ModerationAction[]
-  
+  userId   String
+  reportId String?
+  user     User               @relation(fields: [userId], references: [id])
+  report   ContentReport?     @relation(fields: [reportId], references: [id])
+  actions  ModerationAction[]
+
   @@index([userId, type])
   @@map("violations")
 }
 
 model ModerationAction {
-  id          String   @id @default(cuid())
-  action      ModActionType
-  reason      String
-  duration    Int?     // Duration in hours for temporary actions
-  metadata    Json?    // Additional action-specific data
-  createdAt   DateTime @default(now())
-  expiresAt   DateTime?
-  
+  id        String        @id @default(cuid())
+  action    ModActionType
+  reason    String
+  duration  Int? // Duration in hours for temporary actions
+  metadata  Json? // Additional action-specific data
+  createdAt DateTime      @default(now())
+  expiresAt DateTime?
+
   // Relations
   targetUserId String
-  moderatorId String
-  reportId    String?
-  violationId String?
-  targetUser  User     @relation("TargetUser", fields: [targetUserId], references: [id])
-  moderator   User     @relation("Moderator", fields: [moderatorId], references: [id])
-  report      ContentReport? @relation(fields: [reportId], references: [id])
-  violation   Violation? @relation(fields: [violationId], references: [id])
-  
+  moderatorId  String
+  reportId     String?
+  violationId  String?
+  targetUser   User           @relation("TargetUser", fields: [targetUserId], references: [id])
+  moderator    User           @relation("Moderator", fields: [moderatorId], references: [id])
+  report       ContentReport? @relation(fields: [reportId], references: [id])
+  violation    Violation?     @relation(fields: [violationId], references: [id])
+
   @@index([targetUserId, action])
   @@map("moderation_actions")
 }
@@ -437,7 +447,7 @@ enum FeatureKey {
 
 // Analytics Models
 model AnalyticsEvent {
-  id        String              @id @default(cuid())
+  id        String             @id @default(cuid())
   type      AnalyticsEventType
   feature   FeatureKey?
   page      String?
@@ -448,15 +458,15 @@ model AnalyticsEvent {
   os        String?
   country   String?
   metadata  Json?
-  createdAt DateTime            @default(now())
+  createdAt DateTime           @default(now())
 
   // Relations
-  userId String?
+  userId  String?
   boardId String?
   cardId  String?
-  user   User?  @relation(fields: [userId], references: [id])
-  board  Board? @relation(fields: [boardId], references: [id])
-  card   Card?  @relation(fields: [cardId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+  board   Board?  @relation(fields: [boardId], references: [id])
+  card    Card?   @relation(fields: [cardId], references: [id])
 
   @@index([createdAt])
   @@index([type, createdAt])
@@ -466,15 +476,15 @@ model AnalyticsEvent {
 }
 
 model UserSession {
-  id         String   @id @default(cuid())
-  sessionId  String   @unique
-  startedAt  DateTime @default(now())
-  endedAt    DateTime?
+  id          String    @id @default(cuid())
+  sessionId   String    @unique
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
   durationSec Int?
-  device     String?
-  browser    String?
-  os         String?
-  country    String?
+  device      String?
+  browser     String?
+  os          String?
+  country     String?
 
   // Relations
   userId String?
@@ -493,31 +503,34 @@ enum TransactionStatus {
 }
 
 model Transaction {
-  id        String             @id @default(cuid())
+  id        String            @id @default(cuid())
   plan      String
-  amount    Decimal            @db.Decimal(10, 2)
-  currency  String             @default("USD")
-  status    TransactionStatus  @default(SUCCEEDED)
-  createdAt DateTime           @default(now())
+  amount    Decimal           @db.Decimal(10, 2)
+  currency  String            @default("USD")
+  status    TransactionStatus @default(SUCCEEDED)
+  createdAt DateTime          @default(now())
   metadata  Json?
 
   // Relations
   userId String
-  user   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([plan])
   @@map("transactions")
 }
 
 // System Settings persisted as JSON
 model SystemSettings {
-  id          String   @id @default("default")
-  data        Json
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default("default")
+  data      Json
+  updatedAt DateTime @updatedAt
 
   // Relations
   updatedById String?
-  updatedBy   User?    @relation(fields: [updatedById], references: [id])
+  updatedBy   User?   @relation(fields: [updatedById], references: [id])
 
   @@map("system_settings")
 }
