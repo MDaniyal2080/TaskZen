@@ -28,7 +28,8 @@ import { UiPreferencesDto } from "./dto/ui-preferences.dto";
 import * as fs from "fs";
 
 // Ensure upload directory exists to avoid ENOENT during file writes
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
+const UPLOAD_DIR =
+  process.env.UPLOAD_PATH || process.env.UPLOAD_DIR || "./uploads";
 try {
   if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -159,7 +160,7 @@ export class UsersController {
           cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
         },
       }),
-      limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB (align with client)
       fileFilter: (req, file, cb) => {
         const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
         if (allowed.includes(file.mimetype)) {
@@ -186,6 +187,42 @@ export class UsersController {
     const avatarPath = `/uploads/${file.filename}`;
     const user = await this.usersService.updateAvatar(id, avatarPath);
     return { success: true, user };
+  }
+
+  // Avatar upload for current user (matches client: field name 'avatar', returns user directly)
+  @Post("avatar")
+  @UseInterceptors(
+    FileInterceptor("avatar", {
+      storage: diskStorage({
+        destination: UPLOAD_DIR,
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+          cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB (align with client)
+      fileFilter: (req, file, cb) => {
+        const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+        if (allowed.includes(file.mimetype)) {
+          return cb(null, true);
+        }
+        (req as any).fileValidationError = "Only image files are allowed";
+        return cb(null, false);
+      },
+    }),
+  )
+  async uploadMyAvatar(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req,
+  ) {
+    if (!file) {
+      const msg = (req as any)?.fileValidationError || "No file uploaded";
+      throw new BadRequestException(msg);
+    }
+    const avatarPath = `/uploads/${file.filename}`;
+    const user = await this.usersService.updateAvatar(req.user.id, avatarPath);
+    // Return the updated user directly to match client expectations
+    return user;
   }
 
   @UseGuards(JwtAuthGuard)
