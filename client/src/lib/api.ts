@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { toast } from 'react-hot-toast'
 
 // Robust base URL:
 // - In the browser: use relative '/api/v1' so requests go through Next.js rewrites
@@ -68,7 +69,44 @@ api.interceptors.response.use(
       if (!window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'
       }
+      // Do not show a toast here; redirect is enough
+      return Promise.reject(error)
     }
+
+    // Friendly error toasts for normal users
+    try {
+      // Allow per-request opt-out
+      const suppressed = error?.config?.headers?.['X-Suppress-Error-Toast']
+      if (!suppressed && typeof window !== 'undefined') {
+        const status: number | undefined = error?.response?.status
+        const data = error?.response?.data || {}
+        const serverMessage: string | undefined = (data && (data.message || data.error)) || undefined
+
+        let userMessage = serverMessage
+
+        if (!status) {
+          userMessage = 'Network error. Please check your connection and try again.'
+        } else if (status >= 500) {
+          userMessage = 'Something went wrong on our side. Please try again later.'
+        } else if (status === 404) {
+          userMessage = 'We couldn\'t find what you\'re looking for.'
+        } else if (status === 403) {
+          userMessage = "You don't have permission to do that."
+        } else if (status === 429) {
+          userMessage = 'Too many requests. Please try again in a moment.'
+        } else if (status === 422) {
+          userMessage = 'Validation failed. Please check the form and try again.'
+        } else if (status === 409) {
+          userMessage = 'There\'s a conflict with the current data. Please refresh and try again.'
+        } else if (status === 400) {
+          userMessage = serverMessage || 'Please check your input and try again.'
+        }
+
+        if (userMessage) {
+          toast.error(userMessage)
+        }
+      }
+    } catch {}
     return Promise.reject(error)
   }
 )

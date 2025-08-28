@@ -57,12 +57,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     // Don't expose internal error details in production
-    if (
-      process.env.NODE_ENV === "production" &&
-      status === HttpStatus.INTERNAL_SERVER_ERROR
-    ) {
-      message = "An unexpected error occurred";
-      details = undefined;
+    const isProd = process.env.NODE_ENV === "production";
+    if (isProd) {
+      if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
+        message = "An unexpected error occurred";
+        details = undefined;
+      } else if (status === HttpStatus.NOT_FOUND) {
+        // Provide a friendly 404 message
+        message = "The requested resource was not found.";
+        // Do not include backend details for normal users
+        details = undefined;
+      }
     }
 
     const errorResponse = {
