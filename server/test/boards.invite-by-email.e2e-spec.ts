@@ -146,7 +146,9 @@ describe("Boards: invite by email E2E", () => {
       .set("Authorization", `Bearer ${outsiderToken}`)
       .send({ email: extraUser.email, role: "MEMBER" })
       .expect(403);
-    expect(res.body?.message || res.text).toMatch(/insufficient permissions|access denied/i);
+    expect(res.body?.message || res.text).toMatch(
+      /insufficient permissions|access denied/i,
+    );
   });
 
   it("owner invites with non-existent email -> 404", async () => {

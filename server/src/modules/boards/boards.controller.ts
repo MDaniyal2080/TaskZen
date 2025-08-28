@@ -114,7 +114,11 @@ export class BoardsController {
         {
           type: "object",
           properties: {
-            email: { type: "string", format: "email", example: "user@example.com" },
+            email: {
+              type: "string",
+              format: "email",
+              example: "user@example.com",
+            },
             role: {
               type: "string",
               enum: ["OWNER", "ADMIN", "MEMBER", "VIEWER"],
@@ -129,7 +133,9 @@ export class BoardsController {
   })
   @ApiCreatedResponse({ description: "Member added to board" })
   @ApiBadRequestResponse({ description: "Either userId or email is required" })
-  @ApiForbiddenResponse({ description: "Insufficient permissions or already a member" })
+  @ApiForbiddenResponse({
+    description: "Insufficient permissions or already a member",
+  })
   @ApiNotFoundResponse({ description: "User not found" })
   async addMember(
     @Param("id") id: string,

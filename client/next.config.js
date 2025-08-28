@@ -7,7 +7,20 @@ const nextConfig = {
   compress: true,
   reactStrictMode: true,
   images: {
-    domains: ['localhost', 'res.cloudinary.com'],
+    domains: (() => {
+      const base = ['localhost', 'res.cloudinary.com']
+      const addHost = (url) => {
+        if (!url) return
+        try {
+          const u = new URL(url)
+          const h = u.hostname
+          if (h && !base.includes(h)) base.push(h)
+        } catch {}
+      }
+      addHost(process.env.NEXT_PUBLIC_API_URL)
+      addHost(process.env.NEXT_PUBLIC_WS_URL)
+      return base
+    })(),
   },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1',
@@ -64,5 +77,6 @@ const nextConfig = {
 }
 
 module.exports = nextConfig
+
 
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -486,26 +486,20 @@ export function Card({ card, isDragging = false }: CardProps) {
               <span className="text-xs">{card.comments?.length ?? card._count?.comments ?? 0}</span>
             </div>
           )}
-        </div>
 
-        {/* Assignee */}
-        {card.assignee && (
-          <div className="flex items-center gap-1">
-            {card.assignee.avatar ? (
-              <Image
-                src={card.assignee.avatar}
-                alt={card.assignee.username}
-                width={20}
-                height={20}
-                className="rounded-full"
-              />
-            ) : (
-              <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-medium">
-                {(card.assignee.firstName?.[0] || card.assignee.username?.[0] || '?').toUpperCase()}
-              </div>
-            )}
-          </div>
-        )}
+          {/* Assignee */}
+          {card.assignee && (
+            <div className="flex items-center gap-1">
+              <Avatar className="w-5 h-5">
+                <AvatarImage src={card.assignee.avatar ?? undefined} alt={card.assignee.username} />
+                <AvatarFallback className="bg-indigo-500 text-white text-[10px] font-medium">
+                  {(card.assignee.firstName?.[0] || card.assignee.username?.[0] || '?').toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+          )}
+
+        </div>
 
         {/* Completion Status */}
         {card.isCompleted && (

@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { useSocketStore } from '@/store/socket-store';
 import { useBoardStore } from '@/store/board-store';
+import { normalizeAvatarUrl as normalizeMediaUrl } from '@/lib/utils';
 
 // Build same-origin URLs so Next.js rewrite `/uploads/*` proxies to backend
 
@@ -59,7 +60,7 @@ export function Attachments({ cardId }: AttachmentsProps) {
     try {
       const response = await api.get(`/attachments/card/${cardId}`);
       const data = Array.isArray(response.data) ? (response.data as Attachment[]) : [];
-      setAttachments(data);
+      setAttachments(data.map((a) => ({ ...a, url: normalizeMediaUrl(a.url) ?? a.url })));
     } catch (error) {
       console.error('Failed to fetch attachments:', error);
     }
@@ -77,7 +78,7 @@ export function Attachments({ cardId }: AttachmentsProps) {
       const rec = data as Record<string, unknown> & { id?: string; attachments?: Attachment[] };
       if (!rec.id || rec.id !== cardId) return;
       if (Array.isArray(rec.attachments)) {
-        setAttachments(rec.attachments as Attachment[]);
+        setAttachments((rec.attachments as Attachment[]).map((a) => ({ ...a, url: normalizeMediaUrl(a.url) ?? a.url })));
       }
     };
     socket.on('cardUpdated', onCardUpdated);
@@ -130,7 +131,7 @@ export function Attachments({ cardId }: AttachmentsProps) {
       });
 
       const next = [complete.data as Attachment, ...attachments];
-      setAttachments(next);
+      setAttachments(next.map((attachment) => ({ ...attachment, url: normalizeMediaUrl(attachment.url) ?? attachment.url })));
       // Optimistically update board store so other UI reflects changes immediately
       try { handleCardUpdated({ id: cardId, attachments: next, _count: { attachments: next.length } }); } catch {}
       toast.success('File uploaded successfully');
@@ -139,11 +140,9 @@ export function Attachments({ cardId }: AttachmentsProps) {
       try {
         const formData = new FormData();
         formData.append('file', file);
-        const response = await api.post(`/attachments/card/${cardId}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        const response = await api.post(`/attachments/card/${cardId}`, formData);
         const next = [response.data as Attachment, ...attachments];
-        setAttachments(next);
+        setAttachments(next.map((attachment) => ({ ...attachment, url: normalizeMediaUrl(attachment.url) ?? attachment.url })));
         try { handleCardUpdated({ id: cardId, attachments: next, _count: { attachments: next.length } }); } catch {}
         toast.success('File uploaded successfully');
       } catch (error: unknown) {
@@ -198,8 +197,10 @@ export function Attachments({ cardId }: AttachmentsProps) {
   };
 
   const resolveUrl = (url: string) => {
-    if (/^https?:\/\//i.test(url)) return url; // absolute (e.g., S3)
-    // Ensure leading slash for same-origin path; Next.js rewrites will proxy /uploads/*
+    const normalized = normalizeMediaUrl(url);
+    if (normalized) return normalized;
+    if (/^https?:\/\//i.test(url)) return url; // fallback: absolute (e.g., S3)
+    // fallback: ensure leading slash
     return url.startsWith('/') ? url : `/${url}`;
   };
 
@@ -213,6 +214,7 @@ export function Attachments({ cardId }: AttachmentsProps) {
             fill
             sizes="(max-width: 768px) 50vw, 33vw"
             className="object-cover"
+            unoptimized
             priority={false}
           />
         </div>
