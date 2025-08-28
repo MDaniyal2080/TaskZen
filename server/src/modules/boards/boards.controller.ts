@@ -11,6 +11,7 @@ import {
   Query,
   Res,
   BadRequestException,
+  NotFoundException,
 } from "@nestjs/common";
 import { BoardsService } from "./boards.service";
 import { CreateBoardDto } from "./dto/create-board.dto";
@@ -25,14 +26,23 @@ import {
   ApiParam,
   ApiBearerAuth,
   ApiTags,
+  ApiCreatedResponse,
+  ApiBadRequestResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiBody,
 } from "@nestjs/swagger";
+import { UsersService } from "../users/users.service";
 
 @Controller("boards")
 @UseGuards(JwtAuthGuard)
 @ApiTags("Boards")
 @ApiBearerAuth()
 export class BoardsController {
-  constructor(private readonly boardsService: BoardsService) {}
+  constructor(
+    private readonly boardsService: BoardsService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Post()
   create(@Body() createBoardDto: CreateBoardDto, @Request() req) {
@@ -79,15 +89,71 @@ export class BoardsController {
   }
 
   @Post(":id/members")
-  addMember(
+  @ApiOperation({
+    summary: "Add a member to a board by userId or email",
+    description:
+      "Allows board owners or board admins to add a member. You can provide either a userId or an email. If email is provided, it will be resolved to a userId.",
+  })
+  @ApiParam({ name: "id", description: "Board ID" })
+  @ApiBody({
+    schema: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            userId: { type: "string", example: "ckv123abc" },
+            role: {
+              type: "string",
+              enum: ["OWNER", "ADMIN", "MEMBER", "VIEWER"],
+              example: "MEMBER",
+            },
+          },
+          required: ["userId"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            email: { type: "string", format: "email", example: "user@example.com" },
+            role: {
+              type: "string",
+              enum: ["OWNER", "ADMIN", "MEMBER", "VIEWER"],
+              example: "MEMBER",
+            },
+          },
+          required: ["email"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  })
+  @ApiCreatedResponse({ description: "Member added to board" })
+  @ApiBadRequestResponse({ description: "Either userId or email is required" })
+  @ApiForbiddenResponse({ description: "Insufficient permissions or already a member" })
+  @ApiNotFoundResponse({ description: "User not found" })
+  async addMember(
     @Param("id") id: string,
-    @Body() body: { userId: string; role?: BoardMemberRole },
+    @Body() body: { userId?: string; email?: string; role?: BoardMemberRole },
     @Request() req,
   ) {
+    let memberUserId = body.userId;
+    if (!memberUserId && body.email) {
+      const found = await this.usersService.findByEmailInsensitive(
+        String(body.email),
+      );
+      if (!found) {
+        throw new NotFoundException("User not found");
+      }
+      memberUserId = found.id;
+    }
+    if (!memberUserId) {
+      throw new BadRequestException("Either userId or email is required");
+    }
+
     return this.boardsService.addMember(
       id,
       req.user.id,
-      body.userId,
+      memberUserId,
       body.role,
       req.user.role,
     );

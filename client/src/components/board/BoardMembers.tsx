@@ -6,7 +6,6 @@ import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { BoardPayload, BoardMemberPayload } from '@/store/board-store';
-import type { User } from '@/shared/types';
 
 interface BoardMembersProps {
   boardId: string;
@@ -48,22 +47,10 @@ export function BoardMembers({ boardId, board, currentUserId, onMembersUpdate }:
 
     try {
       setLoading(true);
-      
-      // First, find user by email from all users
-      const { data: allUsers } = await api.get<User[]>('/users');
-      const user = allUsers.find((u) => u.email.toLowerCase() === inviteEmail.toLowerCase());
-      
-      if (!user) {
-        toast.error('User not found with this email');
-        return;
-      }
-
-      const userId = user.id;
-
-      // Add member to board
+      // Invite by email directly (server resolves email to userId)
       await api.post(`/boards/${boardId}/members`, {
-        userId,
-        role: inviteRole
+        email: inviteEmail,
+        role: inviteRole,
       });
 
       toast.success('Member added successfully');

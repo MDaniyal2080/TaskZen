@@ -70,6 +70,22 @@ export class UsersService {
     });
   }
 
+  // Case-insensitive email lookup that only selects safe fields
+  async findByEmailInsensitive(email: string) {
+    return this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        avatar: true,
+        isActive: true,
+      },
+    });
+  }
+
   async findByUsername(username: string) {
     return this.prisma.user.findUnique({
       where: { username },

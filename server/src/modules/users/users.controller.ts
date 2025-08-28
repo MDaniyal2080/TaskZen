@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Request,
+  Query,
   NotFoundException,
   ForbiddenException,
   Put,
@@ -51,6 +52,19 @@ export class UsersController {
       throw new ForbiddenException("Only admins can list users");
     }
     return this.usersService.findAll();
+  }
+
+  // Lightweight lookup for inviting users by email (non-admins allowed)
+  @Get("lookup")
+  async lookupByEmail(@Query("email") email?: string) {
+    if (!email || typeof email !== "string") {
+      throw new BadRequestException("Email is required");
+    }
+    const user = await this.usersService.findByEmailInsensitive(email);
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+    return user;
   }
 
   @Get("profile")
