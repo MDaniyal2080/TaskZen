@@ -84,8 +84,8 @@ export class AuthService {
 
     const settings = await this.settingsService.getSettings();
     const requiredLen = Math.max(
-      6,
-      Number(settings.security?.passwordMinLength ?? 6),
+      8,
+      Number(settings.security?.passwordMinLength ?? 8),
     );
     if ((dto.newPassword || "").length < requiredLen) {
       throw new BadRequestException(
@@ -168,8 +168,8 @@ export class AuthService {
     // Enforce dynamic password policy
     const settings = await this.settingsService.getSettings();
     const requiredLen = Math.max(
-      6,
-      Number(settings.security?.passwordMinLength ?? 6),
+      8,
+      Number(settings.security?.passwordMinLength ?? 8),
     );
     if ((registerDto.password || "").length < requiredLen) {
       throw new BadRequestException(

@@ -154,7 +154,7 @@ export class SystemSettingsService {
           requireEmailVerification: false,
           enableTwoFactor: false,
           sessionTimeout: 10080, // minutes (7 days)
-          passwordMinLength: 6,
+          passwordMinLength: 8,
           maxLoginAttempts: 5,
           loginAttemptWindowSec: 900,
           enableRateLimiting: true,
@@ -279,7 +279,7 @@ export class SystemSettingsService {
             requireEmailVerification: false,
             enableTwoFactor: false,
             sessionTimeout: 10080,
-            passwordMinLength: 6,
+            passwordMinLength: 8,
             maxLoginAttempts: 5,
             loginAttemptWindowSec: 900,
             enableRateLimiting: true,

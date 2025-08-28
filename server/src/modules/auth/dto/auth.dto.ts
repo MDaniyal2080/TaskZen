@@ -11,7 +11,6 @@ export class LoginDto {
   email: string;
 
   @IsString()
-  @MinLength(6)
   password: string;
 }
 
@@ -25,7 +24,7 @@ export class ResetPasswordDto {
   token: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   newPassword: string;
 }
 
@@ -39,7 +38,7 @@ export class RegisterDto {
   username: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password: string;
 
   @IsOptional()
