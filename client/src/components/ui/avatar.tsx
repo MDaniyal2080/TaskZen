@@ -14,14 +14,26 @@ const Avatar = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElem
 Avatar.displayName = "Avatar"
 
 const AvatarImage = React.forwardRef<HTMLImageElement, React.ImgHTMLAttributes<HTMLImageElement>>(
-  ({ className, alt, src, ...rest }, ref) => {
+  ({ className, alt, src, onError, ...rest }, ref) => {
+    const [errored, setErrored] = React.useState(false)
     const normalized = normalizeAvatarUrl(typeof src === 'string' ? src : undefined)
+    React.useEffect(() => {
+      // reset error when the image source changes
+      setErrored(false)
+    }, [normalized])
+    if (errored || !normalized) {
+      return null
+    }
     return (
       <img
         ref={ref}
         className={cn("aspect-square h-full w-full", className)}
         alt={alt ?? ""}
         src={normalized}
+        onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+          setErrored(true)
+          onError?.(e)
+        }}
         {...rest}
       />
     )
@@ -41,3 +53,4 @@ const AvatarFallback = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
 AvatarFallback.displayName = "AvatarFallback"
 
 export { Avatar, AvatarImage, AvatarFallback }
+
