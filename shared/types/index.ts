@@ -28,6 +28,7 @@ export interface UiPreferences {
 export interface BoardUiPreferences {
   compactCardView?: boolean;
   alwaysShowLabels?: boolean;
+  labelDisplay?: 'chips' | 'blocks' | 'hover';
   enableAnimations?: boolean;
 }
 

@@ -46,7 +46,9 @@ describe("Admin Analytics E2E", () => {
     prisma = app.get(PrismaService);
 
     // Ensure no conflicting users exist (idempotent for re-runs)
-    await prisma.user.deleteMany({ where: { OR: [{ email: adminEmail }, { username: adminUsername }] } });
+    await prisma.user.deleteMany({
+      where: { OR: [{ email: adminEmail }, { username: adminUsername }] },
+    });
 
     // Create admin user directly in DB with hashed password
     const hashed = await bcrypt.hash(adminPassword, 12);
@@ -92,7 +94,9 @@ describe("Admin Analytics E2E", () => {
 
   afterAll(async () => {
     // Cleanup created users
-    await prisma.user.deleteMany({ where: { OR: [{ email: adminEmail }, { username: adminUsername }] } });
+    await prisma.user.deleteMany({
+      where: { OR: [{ email: adminEmail }, { username: adminUsername }] },
+    });
     await prisma?.$disconnect();
     await app.close();
   });
@@ -165,7 +169,9 @@ describe("Admin Analytics E2E", () => {
 
   it("enforces authN: 401 without JWT on analytics and export", async () => {
     await request(server).get("/api/v1/admin/analytics").expect(401);
-    await request(server).get("/api/v1/admin/analytics/export?format=csv").expect(401);
+    await request(server)
+      .get("/api/v1/admin/analytics/export?format=csv")
+      .expect(401);
   });
 
   it("enforces authZ: 403 for non-admin user", async () => {
@@ -201,7 +207,8 @@ describe("Admin Analytics E2E", () => {
       .expect("Content-Type", /text\/csv/)
       .expect(200);
 
-    const disp = res.header["content-disposition"] || res.header["Content-Disposition"];
+    const disp =
+      res.header["content-disposition"] || res.header["Content-Disposition"];
     expect(disp).toMatch(/attachment; filename=taskzen-analytics-.*\.csv/);
 
     // Verify CSV content basics
@@ -229,11 +236,17 @@ describe("Admin Analytics E2E", () => {
       .expect("Content-Type", /application\/pdf/)
       .expect(200);
 
-    const disp = res.header["content-disposition"] || res.header["Content-Disposition"];
+    const disp =
+      res.header["content-disposition"] || res.header["Content-Disposition"];
     expect(disp).toMatch(/attachment; filename=taskzen-analytics-.*\.pdf/);
 
-    const lenHeader = res.header["content-length"] || res.header["Content-Length"];
-    const len = lenHeader ? parseInt(lenHeader, 10) : (res.body ? (res.body as Buffer).length : 0);
+    const lenHeader =
+      res.header["content-length"] || res.header["Content-Length"];
+    const len = lenHeader
+      ? parseInt(lenHeader, 10)
+      : res.body
+        ? (res.body as Buffer).length
+        : 0;
     expect(len).toBeGreaterThan(0);
 
     expect(Buffer.isBuffer(res.body)).toBe(true);

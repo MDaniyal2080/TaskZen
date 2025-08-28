@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '@/lib/api';
+import type { Label } from '@/shared/types';
 
 // Lightweight payload types used by the board store to avoid `any` while
 // remaining flexible about backend response shapes.
@@ -20,6 +21,8 @@ export type CardPayload = {
   board?: { id?: string | null } | null;
   comments?: Array<Record<string, unknown>>;
   _count?: { comments?: number; attachments?: number };
+  // Labels can be returned either as denormalized Label[] or as relation objects { label: Label }
+  labels?: Array<Label | { label: Label }>;
 } & Record<string, unknown>;
 
 export type ListPayload = {
@@ -92,6 +95,14 @@ export const extractMessage = (err: unknown): string | undefined => {
   if (isRecord(err) && isRecord(err.response) && isRecord(err.response.data)) {
     const msg = err.response.data.message;
     if (typeof msg === 'string') return msg;
+  }
+  return undefined;
+};
+
+// Safe extractor for labels which may be either denormalized Label[] or relation objects { label: Label }
+const getLabels = (obj: unknown): Array<Label | { label: Label }> | undefined => {
+  if (isRecord(obj) && Array.isArray((obj as { labels?: unknown[] }).labels)) {
+    return (obj as { labels?: Array<Label | { label: Label }> }).labels;
   }
   return undefined;
 };
@@ -192,15 +203,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const lists = Array.isArray(board?.lists) ? board.lists! : [];
     const cards = lists.flatMap((list: ListPayload) => {
       const listCards = Array.isArray(list?.cards) ? list.cards! : [];
-      return listCards.map((card: CardPayload) => ({
-        ...card,
-        listId: list.id,
-        boardId: board.id,
-        isCompleted:
-          typeof card?.isCompleted === 'boolean'
-            ? card.isCompleted
-            : (typeof card?.completed === 'boolean' ? card.completed : false),
-      }));
+      return listCards.map((card: CardPayload) => {
+        const labels = getLabels(card);
+        return {
+          ...card,
+          listId: list.id,
+          boardId: board.id,
+          isCompleted:
+            typeof card?.isCompleted === 'boolean'
+              ? card.isCompleted
+              : (typeof card?.completed === 'boolean' ? card.completed : false),
+          ...(Array.isArray(labels) ? { labels } : {}),
+        } as CardPayload;
+      });
     });
 
     // Remove nested collections we keep separately in the store to satisfy types
@@ -404,11 +419,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           const done = typeof newCard.isCompleted === 'boolean'
             ? (newCard.isCompleted as boolean)
             : (typeof newCard.completed === 'boolean' ? (newCard.completed as boolean) : false);
+          const labels = getLabels(newCard);
           normalized = {
             ...(newCard as Partial<CardPayload> & Record<string, unknown>),
             listId: listIdResolved,
             boardId: boardIdResolved,
             isCompleted: done,
+            ...(Array.isArray(labels) ? { labels } : {}),
           } as CardPayload;
         } else {
           normalized = {
@@ -699,6 +716,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const resolvedListId = data?.listId ?? data?.list?.id;
       const incomingTitle = data?.title;
 
+      const labels = getLabels(data);
       const normalized: CardPayload = {
         ...(data as Partial<CardPayload> & Record<string, unknown>),
         listId: resolvedListId,
@@ -707,6 +725,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           typeof data?.isCompleted === 'boolean'
             ? data.isCompleted
             : (typeof data?.completed === 'boolean' ? (data.completed as boolean) : false),
+        ...(Array.isArray(labels) ? { labels } : {}),
       } as CardPayload;
 
       // If an optimistic placeholder exists for same list/title, replace it
@@ -771,6 +790,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             ...existingCountObj,
             attachments: typeof nextCount === 'number' ? nextCount : (prevCount ?? 0),
           } as Record<string, unknown>;
+        }
+
+        // Explicitly handle labels array if present on the payload
+        const incomingLabels = (data as Record<string, unknown>)?.labels;
+        if (Array.isArray(incomingLabels)) {
+          (merged as Record<string, unknown>).labels = incomingLabels as Array<Label | { label: Label }>;
         }
 
         return merged as CardPayload;

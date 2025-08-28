@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, ValidateNested } from "class-validator";
+import { IsBoolean, IsOptional, ValidateNested, IsIn } from "class-validator";
 import { Type } from "class-transformer";
 
 class BoardPreferencesDto {
@@ -9,6 +9,10 @@ class BoardPreferencesDto {
   @IsOptional()
   @IsBoolean()
   alwaysShowLabels?: boolean;
+
+  @IsOptional()
+  @IsIn(["chips", "blocks", "hover"])
+  labelDisplay?: "chips" | "blocks" | "hover";
 
   @IsOptional()
   @IsBoolean()

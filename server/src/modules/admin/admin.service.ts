@@ -10,7 +10,6 @@ import * as PDFDocument from "pdfkit";
 import type { Prisma } from "@prisma/client";
 import type { SystemSettingsShape } from "../../common/services/system-settings.service";
 
-
 @Injectable()
 export class AdminService {
   constructor(
@@ -29,7 +28,10 @@ export class AdminService {
   // Small TTL caches to protect hot endpoints (revenue transactions, recent activities)
   private txCache = new Map<string, { value: any; expiresAt: number }>();
   private txInflight = new Map<string, Promise<any>>();
-  private activitiesCache = new Map<string, { value: any; expiresAt: number }>();
+  private activitiesCache = new Map<
+    string,
+    { value: any; expiresAt: number }
+  >();
   private activitiesInflight = new Map<string, Promise<any>>();
   private get smallCacheTtlMs() {
     const n = Number(process.env.ADMIN_SMALL_CACHE_TTL_MS || 3000);
@@ -194,9 +196,7 @@ export class AdminService {
 
     let rows: { ym: string; sum: number | null }[] = [];
     try {
-      rows = await this.prisma.$queryRaw<
-        { ym: string; sum: number | null }[]
-      >`
+      rows = await this.prisma.$queryRaw<{ ym: string; sum: number | null }[]>`
         SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS ym,
                SUM("amount")::float8 AS sum
         FROM "transactions"
@@ -1068,7 +1068,7 @@ export class AdminService {
           mode: "insensitive",
         } as Prisma.StringFilter;
       } else {
-        (where.AND ||= []);
+        where.AND ||= [];
         (where.AND as Prisma.TransactionWhereInput[]).push({
           OR: synonyms.map((v) => ({
             plan: { equals: v, mode: "insensitive" },
@@ -1079,12 +1079,14 @@ export class AdminService {
     if (statusFilter) where.status = statusFilter;
     if (q && q.trim()) {
       const term = q.trim();
-      (where.AND ||= []);
+      where.AND ||= [];
       (where.AND as Prisma.TransactionWhereInput[]).push({
         OR: [
           { id: { contains: term, mode: "insensitive" } },
           { user: { is: { email: { contains: term, mode: "insensitive" } } } },
-          { user: { is: { username: { contains: term, mode: "insensitive" } } } },
+          {
+            user: { is: { username: { contains: term, mode: "insensitive" } } },
+          },
         ],
       });
     }
@@ -1175,7 +1177,7 @@ export class AdminService {
           mode: "insensitive",
         } as Prisma.StringFilter;
       } else {
-        (where.AND ||= []);
+        where.AND ||= [];
         (where.AND as Prisma.TransactionWhereInput[]).push({
           OR: synonyms.map((v) => ({
             plan: { equals: v, mode: "insensitive" },
@@ -1186,12 +1188,14 @@ export class AdminService {
     if (statusFilter) where.status = statusFilter;
     if (q && q.trim()) {
       const term = q.trim();
-      (where.AND ||= []);
+      where.AND ||= [];
       (where.AND as Prisma.TransactionWhereInput[]).push({
         OR: [
           { id: { contains: term, mode: "insensitive" } },
           { user: { is: { email: { contains: term, mode: "insensitive" } } } },
-          { user: { is: { username: { contains: term, mode: "insensitive" } } } },
+          {
+            user: { is: { username: { contains: term, mode: "insensitive" } } },
+          },
         ],
       });
     }

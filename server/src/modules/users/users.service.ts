@@ -318,6 +318,19 @@ export class UsersService {
   }
 
   // UI preferences
+  async getRawUiPreferences(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { uiPreferences: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    return (user.uiPreferences ?? {}) as any;
+  }
+
   async getUiPreferences(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -333,10 +346,17 @@ export class UsersService {
         compactCardView: false,
         alwaysShowLabels: true,
         enableAnimations: true,
+        labelDisplay: "chips" as "chips" | "blocks" | "hover",
       },
     };
 
-    return user.uiPreferences ?? defaults;
+    const prefs = (user.uiPreferences ?? defaults) as any;
+    const board = (prefs.board ?? {}) as any;
+    if (typeof board.labelDisplay === "undefined") {
+      board.labelDisplay =
+        (board.alwaysShowLabels ?? true) ? "chips" : "blocks";
+    }
+    return { ...prefs, board };
   }
 
   async updateUiPreferences(userId: string, prefs: any) {

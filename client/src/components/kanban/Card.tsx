@@ -22,15 +22,18 @@ import { createPortal } from 'react-dom';
 import { CardDetailModal } from './CardDetailModal';
 import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Priority, Card as CardType, Label, User } from '@/shared/types';
+import type { Priority } from '@/shared/types';
+import type { CardView, LabelOrRelation } from '@/types/kanban';
 
-type LabelOrRelation = Label | { label: Label };
-type CardView = CardType & {
-  _count?: { comments?: number; attachments?: number } | null;
-  labels?: LabelOrRelation[];
-  assignee?: User;
-};
+ 
 
+type LabelDisplay = 'chips' | 'blocks' | 'hover';
+interface UiBoardPrefs {
+  compactCardView?: boolean;
+  enableAnimations?: boolean;
+  labelDisplay?: LabelDisplay;
+  alwaysShowLabels?: boolean;
+}
 const getHttpStatus = (error: unknown): number | undefined =>
   (error as { response?: { status?: number } })?.response?.status;
 
@@ -53,10 +56,10 @@ export function Card({ card, isDragging = false }: CardProps) {
   const { updateCard: updateCardInStore, deleteCard: deleteCardInStore } = useBoardStore();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const boardPrefs = user?.uiPreferences?.board || {};
-  const compact = !!boardPrefs.compactCardView;
-  const showLabelChips = boardPrefs.alwaysShowLabels ?? true;
-  const anims = boardPrefs.enableAnimations ?? true;
+  const boardPrefs = user?.uiPreferences?.board as UiBoardPrefs | undefined;
+  const compact = !!boardPrefs?.compactCardView;
+  const labelDisplay: LabelDisplay = boardPrefs?.labelDisplay ?? ((boardPrefs?.alwaysShowLabels ?? true) ? 'chips' : 'blocks');
+  const anims = boardPrefs?.enableAnimations ?? true;
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(card.title);
@@ -355,7 +358,7 @@ export function Card({ card, isDragging = false }: CardProps) {
     >
       {/* Card Labels (moved above title) */}
       {card.labels && card.labels.length > 0 && (
-        showLabelChips ? (
+        labelDisplay === 'chips' ? (
           <div className="flex flex-wrap gap-1 mb-2">
             {card.labels.map((labelRelation: LabelOrRelation) => {
               const label = 'label' in labelRelation ? labelRelation.label : labelRelation;
@@ -364,13 +367,14 @@ export function Card({ card, isDragging = false }: CardProps) {
                   key={label.id}
                   className={cn("px-2 py-0.5 text-xs font-medium rounded-full", compact && 'text-[10px] px-1.5 py-0.5')}
                   style={{ backgroundColor: label.color + '20', color: label.color }}
+                  title={label.name}
                 >
                   {label.name}
                 </span>
               );
             })}
           </div>
-        ) : (
+        ) : labelDisplay === 'blocks' ? (
           <div className={cn("flex flex-wrap gap-1 mb-2", compact && 'mb-1')}>
             {card.labels.map((labelRelation: LabelOrRelation) => {
               const label = 'label' in labelRelation ? labelRelation.label : labelRelation;
@@ -379,7 +383,31 @@ export function Card({ card, isDragging = false }: CardProps) {
                   key={label.id}
                   className="inline-block rounded"
                   style={{ backgroundColor: label.color, height: 6, width: 20, opacity: 0.9 }}
+                  title={label.name}
+                  aria-label={label.name}
                 />
+              );
+            })}
+          </div>
+        ) : (
+          <div className={cn("group flex flex-wrap gap-1 mb-2", compact && 'mb-1')}>
+            {card.labels.map((labelRelation: LabelOrRelation) => {
+              const label = 'label' in labelRelation ? labelRelation.label : labelRelation;
+              return (
+                <span
+                  key={label.id}
+                  className={cn("inline-flex items-center rounded-full transition-all overflow-hidden", compact ? 'text-[10px]' : 'text-xs')}
+                  style={{ backgroundColor: label.color + '20', color: label.color }}
+                  title={label.name}
+                >
+                  <span
+                    className="h-1.5 w-5 rounded-sm mx-1"
+                    style={{ backgroundColor: label.color }}
+                  />
+                  <span className="opacity-0 group-hover:opacity-100 whitespace-nowrap pr-2">
+                    {label.name}
+                  </span>
+                </span>
               );
             })}
           </div>

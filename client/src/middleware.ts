@@ -28,14 +28,20 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const decodeJwt = (token: string): Record<string, any> | null => {
+  interface JwtPayload {
+    exp?: number | string
+    role?: string
+    [key: string]: unknown
+  }
+
+  const decodeJwt = (token: string): JwtPayload | null => {
     try {
       const parts = token.split('.')
       if (parts.length < 2) return null
       const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
       const pad = '='.repeat((4 - (b64.length % 4)) % 4)
       const json = atob(b64 + pad)
-      return JSON.parse(json) as Record<string, any>
+      return JSON.parse(json) as JwtPayload
     } catch {
       return null
     }
@@ -53,7 +59,7 @@ export function middleware(request: NextRequest) {
     }
   })()
   const isAuthenticated = !!payload && !isExpired
-  const role = (payload?.role as string | undefined) || ''
+  const role = typeof payload?.role === 'string' ? payload.role : ''
 
   // Admin-only section
   if (pathname.startsWith('/admin')) {

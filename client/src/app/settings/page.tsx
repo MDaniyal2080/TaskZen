@@ -19,6 +19,8 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useSettings } from '@/contexts/SettingsContext'
+import type { User as UserType, UiPreferences } from '@/shared/types'
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select'
 
 // Safely extract API error message
 function extractErrorMessage(e: unknown, fallback: string) {
@@ -36,13 +38,15 @@ function extractErrorMessage(e: unknown, fallback: string) {
 
 export default function SettingsPage() {
   const router = useRouter()
-  const { user, fetchMe } = useAuthStore()
+  const { user, fetchMe, setUser } = useAuthStore()
   const { theme, setTheme } = useTheme()
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const { settings } = useSettings()
   const appName = settings?.siteName || 'TaskZen'
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const originalUserRef = useRef<UserType | null>(null)
+  const hasSavedRef = useRef(false)
   
   // Form states
   const [profileData, setProfileData] = useState({
@@ -68,10 +72,10 @@ export default function SettingsPage() {
     weeklyReport: false
   })
 
-  const [uiPrefs, setUiPrefs] = useState({
+  const [uiPrefs, setUiPrefs] = useState<UiPreferences>({
     board: {
       compactCardView: false,
-      alwaysShowLabels: true,
+      labelDisplay: 'chips',
       enableAnimations: true,
     },
   })
@@ -79,6 +83,9 @@ export default function SettingsPage() {
   useEffect(() => {
     setMounted(true)
     if (user) {
+      if (!originalUserRef.current) {
+        originalUserRef.current = user
+      }
       setProfileData({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
@@ -88,13 +95,16 @@ export default function SettingsPage() {
       })
       // Initialize UI prefs from auth store to avoid flicker
       if (user.uiPreferences) {
-        setUiPrefs((prev) => ({
-          board: {
-            compactCardView: user.uiPreferences?.board?.compactCardView ?? prev.board.compactCardView,
-            alwaysShowLabels: user.uiPreferences?.board?.alwaysShowLabels ?? prev.board.alwaysShowLabels,
-            enableAnimations: user.uiPreferences?.board?.enableAnimations ?? prev.board.enableAnimations,
-          },
-        }))
+        setUiPrefs((prev) => {
+          const pBoard = prev.board ?? {}
+          return {
+            board: {
+              compactCardView: user.uiPreferences?.board?.compactCardView ?? pBoard.compactCardView,
+              labelDisplay: user.uiPreferences?.board?.labelDisplay ?? (typeof user.uiPreferences?.board?.alwaysShowLabels === 'boolean' ? (user.uiPreferences.board.alwaysShowLabels ? 'chips' : 'blocks') : pBoard.labelDisplay),
+              enableAnimations: user.uiPreferences?.board?.enableAnimations ?? pBoard.enableAnimations,
+            },
+          }
+        })
       }
       ;(async () => {
         try {
@@ -105,19 +115,31 @@ export default function SettingsPage() {
         }
         try {
           const { data: ui } = await api.get(`/users/${user.id}/ui-preferences`)
-          setUiPrefs((prev) => ({
-            board: {
-              compactCardView: ui?.board?.compactCardView ?? prev.board.compactCardView,
-              alwaysShowLabels: ui?.board?.alwaysShowLabels ?? prev.board.alwaysShowLabels,
-              enableAnimations: ui?.board?.enableAnimations ?? prev.board.enableAnimations,
-            },
-          }))
+          setUiPrefs((prev) => {
+            const pBoard = prev.board ?? {}
+            return {
+              board: {
+                compactCardView: ui?.board?.compactCardView ?? pBoard.compactCardView,
+                labelDisplay: ui?.board?.labelDisplay ?? (typeof ui?.board?.alwaysShowLabels === 'boolean' ? (ui.board.alwaysShowLabels ? 'chips' : 'blocks') : pBoard.labelDisplay),
+                enableAnimations: ui?.board?.enableAnimations ?? pBoard.enableAnimations,
+              },
+            }
+          })
         } catch {
           // ignore; will use defaults
         }
       })()
     }
   }, [user])
+
+  // Revert optimistic UI-pref changes if user navigates away without saving
+  useEffect(() => {
+    return () => {
+      if (!hasSavedRef.current && originalUserRef.current) {
+        setUser(originalUserRef.current)
+      }
+    }
+  }, [setUser])
 
   if (!mounted) return null
 
@@ -185,6 +207,7 @@ export default function SettingsPage() {
     try {
       await api.put(`/users/${user?.id}/ui-preferences`, uiPrefs)
       toast.success('Appearance preferences updated!')
+      hasSavedRef.current = true
       await fetchMe()
     } catch (error: unknown) {
       toast.error(extractErrorMessage(error, 'Failed to update appearance preferences'))
@@ -208,9 +231,7 @@ export default function SettingsPage() {
     form.append('file', file)
     setLoading(true)
     try {
-      const res = await api.post(`/users/${user.id}/avatar`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const res = await api.post(`/users/${user.id}/avatar`, form)
       if (res.data?.user) {
         await fetchMe()
         setProfileData((prev) => ({ ...prev, avatar: res.data.user.avatar || '' }))
@@ -447,32 +468,86 @@ export default function SettingsPage() {
                         <Switch 
                           id="compact-view"
                           checked={!!uiPrefs.board?.compactCardView}
-                          onCheckedChange={(checked) => setUiPrefs((prev) => ({
-                            ...prev,
-                            board: { ...prev.board, compactCardView: checked },
-                          }))}
+                          onCheckedChange={(checked) => {
+                            setUiPrefs((prev) => ({
+                              ...prev,
+                              board: { ...prev.board, compactCardView: checked },
+                            }))
+                            if (user) {
+                              setUser({
+                                ...user,
+                                uiPreferences: {
+                                  ...(user.uiPreferences || {}),
+                                  board: {
+                                    ...(user.uiPreferences?.board || {}),
+                                    compactCardView: checked,
+                                  },
+                                },
+                              } as UserType)
+                            }
+                          }}
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="show-labels">Always Show Labels</Label>
-                        <Switch 
-                          id="show-labels"
-                          checked={!!uiPrefs.board?.alwaysShowLabels}
-                          onCheckedChange={(checked) => setUiPrefs((prev) => ({
-                            ...prev,
-                            board: { ...prev.board, alwaysShowLabels: checked },
-                          }))}
-                        />
+                        <Label htmlFor="label-display">Label Display</Label>
+                        <div className="w-56">
+                          <Select
+                            value={uiPrefs.board?.labelDisplay ?? (uiPrefs.board?.alwaysShowLabels ? 'chips' : 'blocks')}
+                            onValueChange={(value: 'chips' | 'blocks' | 'hover') => {
+                              setUiPrefs((prev) => ({
+                                ...prev,
+                                board: { ...prev.board, labelDisplay: value },
+                              }))
+                              if (user) {
+                                setUser({
+                                  ...user,
+                                  uiPreferences: {
+                                    ...(user.uiPreferences || {}),
+                                    board: {
+                                      ...(user.uiPreferences?.board || {}),
+                                      labelDisplay: value,
+                                      // keep boolean roughly in sync for legacy reads
+                                      alwaysShowLabels: value === 'chips',
+                                    },
+                                  },
+                                } as UserType)
+                              }
+                            }}
+                          >
+                            <SelectTrigger id="label-display">
+                              <SelectValue placeholder="Select mode" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="chips">Chips (with text)</SelectItem>
+                              <SelectItem value="blocks">Color blocks</SelectItem>
+                              <SelectItem value="hover">Show labels on hover</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <Label htmlFor="animations">Enable Animations</Label>
                         <Switch 
                           id="animations"
                           checked={!!uiPrefs.board?.enableAnimations}
-                          onCheckedChange={(checked) => setUiPrefs((prev) => ({
-                            ...prev,
-                            board: { ...prev.board, enableAnimations: checked },
-                          }))}
+                          onCheckedChange={(checked) => {
+                            setUiPrefs((prev) => ({
+                              ...prev,
+                              board: { ...prev.board, enableAnimations: checked },
+                            }))
+                            if (user) {
+                              setUser({
+                                ...user,
+                                uiPreferences: {
+                                  ...(user.uiPreferences || {}),
+                                  board: {
+                                    ...(user.uiPreferences?.board || {}),
+                                    enableAnimations: checked,
+                                  },
+                                },
+                              } as UserType)
+                            }
+                          }}
                         />
                       </div>
                     </div>

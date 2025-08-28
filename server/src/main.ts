@@ -91,7 +91,10 @@ async function bootstrap() {
       res.setHeader("Cache-Control", "public, max-age=3600, immutable");
     },
   });
-  Logger.log(`📁 Serving uploads from ${uploadAbsPath} at /uploads/`, "Bootstrap");
+  Logger.log(
+    `📁 Serving uploads from ${uploadAbsPath} at /uploads/`,
+    "Bootstrap",
+  );
 
   // Global prefix
   app.setGlobalPrefix("api/v1");

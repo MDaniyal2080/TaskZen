@@ -15,13 +15,10 @@ import { useBoardStore } from '@/store/board-store';
 import { createPortal } from 'react-dom';
 import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
-import type { Card as CardType, List as ListType, Label, User } from '@/shared/types';
+import type { List as ListType } from '@/shared/types';
+import type { CardView } from '@/types/kanban';
 
-type CardView = CardType & {
-  _count?: { comments?: number; attachments?: number } | null;
-  labels?: Array<Label | { label: Label }>;
-  assignee?: User;
-};
+// Uses CardView shape from shared Kanban types
 
 const getHttpStatus = (error: unknown): number | undefined =>
   (error as { response?: { status?: number } })?.response?.status;

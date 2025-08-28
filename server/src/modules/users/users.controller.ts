@@ -18,13 +18,13 @@ import {
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { UpdateUserDto } from "./dto/update-user.dto";
-import { ChangePasswordDto } from "./dto/change-password.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
 import { extname } from "path";
 import { NotificationPreferencesDto } from "./dto/notification-preferences.dto";
 import { UiPreferencesDto } from "./dto/ui-preferences.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import * as fs from "fs";
 
 // Ensure upload directory exists to avoid ENOENT during file writes
@@ -46,13 +46,17 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  findAll() {
+  findAll(@Request() req) {
+    if (req.user.role !== "ADMIN") {
+      throw new ForbiddenException("Only admins can list users");
+    }
     return this.usersService.findAll();
   }
 
   @Get("profile")
-  getProfile(@Request() req) {
-    return req.user;
+  async getProfile(@Request() req) {
+    // Return a fresh snapshot to ensure fields like isPro/proExpiresAt are up-to-date
+    return this.usersService.findById(req.user.id);
   }
 
   @Patch("profile")
@@ -70,7 +74,15 @@ export class UsersController {
     return this.usersService.update(req.user.id, payload);
   }
 
-  
+  @Post("change-password")
+  async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+    await this.usersService.changePassword(
+      req.user.id,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    return { success: true, message: "Password updated successfully" };
+  }
 
   @Get(":id/notifications")
   async getNotifications(@Param("id") id: string, @Request() req) {
@@ -150,17 +162,31 @@ export class UsersController {
     if (req.user.id !== id && req.user.role !== "ADMIN") {
       throw new ForbiddenException("You can only update your own preferences");
     }
-    const current = await this.usersService.getUiPreferences(id);
+    // Use RAW prefs here so computed fallbacks (like labelDisplay) don't block legacy mapping
+    const current = await this.usersService.getRawUiPreferences(id);
     const safeCurrent = (
       typeof current === "object" && current !== null ? current : {}
     ) as Record<string, any>;
     const incoming = (dto as any) || {};
+    const incomingBoard = (incoming.board || {}) as Record<string, any>;
+    const mergedBoard = {
+      ...(safeCurrent.board || {}),
+      ...incomingBoard,
+    } as Record<string, any>;
+    // Back-compat mapping: if client sends legacy alwaysShowLabels and does not explicitly set labelDisplay
+    // (including when the DTO defines labelDisplay as an own property with value undefined),
+    // then derive labelDisplay from alwaysShowLabels.
+    if (
+      typeof (incomingBoard as any).labelDisplay === "undefined" &&
+      Object.prototype.hasOwnProperty.call(incomingBoard, "alwaysShowLabels")
+    ) {
+      mergedBoard.labelDisplay = incomingBoard.alwaysShowLabels
+        ? "chips"
+        : "blocks";
+    }
     const merged = {
       ...safeCurrent,
-      board: {
-        ...(safeCurrent.board || {}),
-        ...(incoming.board || {}),
-      },
+      board: mergedBoard,
     };
     return this.usersService.updateUiPreferences(id, merged);
   }
@@ -172,7 +198,8 @@ export class UsersController {
 
   @Patch("preferences")
   async updateMyPreferences(@Body() body: any, @Request() req) {
-    const current = await this.usersService.getUiPreferences(req.user.id);
+    // Merge against RAW prefs to avoid persisting computed defaults
+    const current = await this.usersService.getRawUiPreferences(req.user.id);
     const safeCurrent = (
       typeof current === "object" && current !== null ? current : {}
     ) as Record<string, any>;
@@ -180,7 +207,7 @@ export class UsersController {
 
     const merged: Record<string, any> = {
       ...safeCurrent,
-      board: { ...(((safeCurrent as any)?.board) || {}) },
+      board: { ...((safeCurrent as any)?.board || {}) },
     };
     if (typeof incoming.theme === "string") merged.theme = incoming.theme;
     if (typeof incoming.language === "string")
@@ -192,7 +219,10 @@ export class UsersController {
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string) {
+  findOne(@Param("id") id: string, @Request() req) {
+    if (req.user.id !== id && req.user.role !== "ADMIN") {
+      throw new ForbiddenException("Not authorized to view this user");
+    }
     return this.usersService.findById(id);
   }
 
@@ -203,13 +233,18 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto,
     @Request() req,
   ) {
-    // Users can only update their own profile
+    // Allow self-update or admin updates; block others
     if (req.user.id !== id && req.user.role !== "ADMIN") {
-      throw new ForbiddenException("You can only update your own profile");
+      throw new ForbiddenException("Not authorized to update this user");
     }
 
     try {
-      const user = await this.usersService.update(id, updateUserDto);
+      // Prevent privilege escalation: non-admins cannot update the 'role'
+      const safeDto: UpdateUserDto = { ...updateUserDto };
+      if (req.user.role !== "ADMIN") {
+        delete (safeDto as any).role;
+      }
+      const user = await this.usersService.update(id, safeDto);
       if (!user) {
         throw new NotFoundException("User not found");
       }
@@ -287,7 +322,8 @@ export class UsersController {
       storage: diskStorage({
         destination: UPLOAD_DIR,
         filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const uniqueSuffix =
+            Date.now() + "-" + Math.round(Math.random() * 1e9);
           cb(null, `${uniqueSuffix}${extname(file.originalname)}`);
         },
       }),
@@ -388,16 +424,5 @@ export class UsersController {
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
     return this.usersService.upgradeToProUser(id, expiresAt);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post("change-password")
-  async changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
-    await this.usersService.changePassword(
-      req.user.id,
-      dto.currentPassword,
-      dto.newPassword,
-    );
-    return { success: true, message: "Password updated successfully" };
   }
 }

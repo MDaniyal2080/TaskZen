@@ -2,7 +2,7 @@
 
 import { create } from 'zustand'
 import { api, setAuthToken } from '@/lib/api'
-import type { User, AuthResponse, RegisterRequest } from '@/shared/types/index'
+import type { User, AuthResponse, RegisterRequest } from '@/shared/types'
 
 // Safe helpers for error handling without using `any`
 const isRecord = (v: unknown): v is Record<string, unknown> =>

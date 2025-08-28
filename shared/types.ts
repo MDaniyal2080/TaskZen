@@ -4,6 +4,19 @@ export type UserRole = 'USER' | 'ADMIN'
 export type BoardMemberRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 
+// UI Preferences
+export interface BoardUiPreferences {
+  compactCardView?: boolean
+  // legacy boolean, still supported for fallback reads
+  alwaysShowLabels?: boolean
+  labelDisplay?: 'chips' | 'blocks' | 'hover'
+  enableAnimations?: boolean
+}
+
+export interface UiPreferences {
+  board?: BoardUiPreferences
+}
+
 export interface User {
   id: string
   email: string
@@ -15,6 +28,8 @@ export interface User {
   isPro: boolean
   proExpiresAt?: string | null
   isActive: boolean
+  // Optional UI preferences, merged server-side
+  uiPreferences?: UiPreferences
   createdAt: string
   updatedAt: string
 }

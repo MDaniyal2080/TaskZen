@@ -33,15 +33,10 @@ import { ActivityLogs } from '@/components/activity/ActivityLogs';
 import { cn } from '@/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import type { List as ListType, Card as CardType, Label, User, Priority } from '@/shared/types';
+import type { List as ListType, User, Priority } from '@/shared/types';
+import type { CardView, LabelOrRelation } from '@/types/kanban';
 
-// Local view types and mappers to satisfy strict component props
-type LabelOrRelation = Label | { label: Label };
-type CardView = CardType & {
-  _count?: { comments?: number; attachments?: number } | null;
-  labels?: LabelOrRelation[];
-  assignee?: User;
-};
+// Mapper helpers to satisfy strict component props
 
 const toDate = (v: unknown): string | undefined => {
   if (typeof v === 'string' || typeof v === 'number' || v instanceof Date) {
@@ -72,6 +67,20 @@ const toCardView = (p: CardPayload): CardView | null => {
   if (!listId) return null;
   const createdAt = toDate((p as Record<string, unknown>).createdAt) ?? new Date().toISOString();
   const updatedAt = toDate((p as Record<string, unknown>).updatedAt) ?? new Date().toISOString();
+
+  // Preserve labels from backend payload. They may be denormalized Label[] or relation objects { label: Label }.
+  const rawLabels = (p as { labels?: unknown }).labels;
+  const labels = Array.isArray(rawLabels) ? (rawLabels as LabelOrRelation[]) : undefined;
+
+  // Try to resolve an assignee object if present on the payload (optional in API responses)
+  const maybeAssignee = (p as Record<string, unknown>).assignee
+    ?? (p as Record<string, unknown>).user
+    ?? (p as Record<string, unknown>).assignedTo
+    ?? (p as Record<string, unknown>).member;
+  const assignee = (typeof maybeAssignee === 'object' && maybeAssignee !== null && 'id' in (maybeAssignee as Record<string, unknown>) && typeof (maybeAssignee as { id?: unknown }).id === 'string')
+    ? (maybeAssignee as unknown as User)
+    : undefined;
+
   return {
     id: p.id,
     title: typeof p.title === 'string' && p.title.length > 0 ? p.title : 'Untitled',
@@ -95,6 +104,8 @@ const toCardView = (p: CardPayload): CardView | null => {
     createdAt,
     updatedAt,
     _count: p._count,
+    labels,
+    assignee,
   };
 };
 
@@ -550,6 +561,38 @@ export function Board({ boardId }: BoardProps) {
         filteredCards = filteredCards.filter(c => c.isCompleted);
       } else {
         filteredCards = filteredCards.filter(c => !c.isCompleted);
+      }
+    }
+
+    // Assignee filter
+    if (filters.assignee !== 'all') {
+      filteredCards = filteredCards.filter(c => c.assigneeId === filters.assignee);
+    }
+
+    // Labels filter
+    if (filters.labels !== 'all') {
+      if (filters.labels === 'none') {
+        filteredCards = filteredCards.filter(c => !Array.isArray((c as Record<string, unknown>).labels) || ((c as { labels?: unknown[] }).labels?.length ?? 0) === 0);
+      } else {
+        const labelId = filters.labels;
+        filteredCards = filteredCards.filter(c => {
+          const raw = (c as { labels?: unknown[] }).labels;
+          if (!Array.isArray(raw)) return false;
+          return raw.some((item: unknown) => {
+            if (item && typeof item === 'object') {
+              const obj = item as Record<string, unknown>;
+              // relation form { label: Label }
+              if (obj.label && typeof obj.label === 'object' && obj.label !== null && 'id' in (obj.label as Record<string, unknown>)) {
+                return (obj.label as { id?: string }).id === labelId;
+              }
+              // denormalized Label
+              if ('id' in obj && typeof obj.id === 'string') {
+                return (obj.id as string) === labelId;
+              }
+            }
+            return false;
+          });
+        });
       }
     }
     

@@ -73,7 +73,8 @@ export class PrismaService
         this.$connect(),
         new Promise((_, reject) => {
           t = setTimeout(
-            () => reject(new Error(`Prisma $connect timeout after ${timeoutMs}ms`)),
+            () =>
+              reject(new Error(`Prisma $connect timeout after ${timeoutMs}ms`)),
             timeoutMs,
           );
           // Do not keep the event loop alive just for this timer

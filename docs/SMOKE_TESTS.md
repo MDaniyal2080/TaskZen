@@ -29,10 +29,17 @@ fetch('/api/v1/status', { credentials: 'include' })
 
 ## 5) Logs and performance
 - Railway logs: watch for Prisma warnings (>500ms) and any 4xx/5xx spikes.
-- If timeouts occur, increase `SETTINGS_FETCH_TIMEOUT_MS` to 5000.
-- Adjust rate limits if legitimate traffic is throttled.
+  - If timeouts occur, increase `SETTINGS_FETCH_TIMEOUT_MS` to 5000.
+  - Adjust rate limits if legitimate traffic is throttled.
 
 ## 6) Common issues
 - CORS blocked: ensure `FRONTEND_URL` and `CLIENT_URL` exactly match the Netlify origin (https, no trailing slash).
 - WS not working behind multiple instances: run a single replica or add a Socket.IO Redis adapter.
 - DB connection errors: verify Neon URLs and `sslmode=require`.
+
+## 7) Label display preference
+- Log in, go to Settings → Board preferences.
+- Change Label display to Chips. Save, refresh page: cards should show text label chips.
+- Change to Blocks. Save, refresh: cards should show color blocks only (no text).
+- Change to Hover. Save: cards show blocks; hovering a card reveals text labels.
+- Optional back-compat check: users with legacy `alwaysShowLabels=true` map to Chips; `false` maps to Blocks.
