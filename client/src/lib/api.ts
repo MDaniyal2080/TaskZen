@@ -65,6 +65,10 @@ api.interceptors.response.use(
     }
 
     if (error?.response?.status === 401 && typeof window !== 'undefined') {
+      // Ensure any consumer that chooses to toast error.message sees a friendly text
+      try {
+        error.message = 'Please sign in to continue.'
+      } catch {}
       setAuthToken(null)
       if (!window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'

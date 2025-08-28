@@ -11,18 +11,33 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 const extractMessage = (err: unknown, fallback: string): string => {
   if (typeof err === 'string') return err
   if (isRecord(err)) {
-    const direct = err['message']
-    if (typeof direct === 'string') return direct
+    // Prefer server-provided message first
     const response = err['response']
     if (isRecord(response)) {
       const data = response['data']
       if (isRecord(data)) {
         const msg = data['message']
         if (typeof msg === 'string') return msg
+        const errStr = data['error']
+        if (typeof errStr === 'string') return errStr
       }
     }
+    // Fallback to generic error message from the error object
+    const direct = err['message']
+    if (typeof direct === 'string') return direct
   }
   return fallback
+}
+
+const extractStatus = (err: unknown): number | undefined => {
+  if (isRecord(err)) {
+    const response = err['response']
+    if (isRecord(response)) {
+      const status = response['status']
+      if (typeof status === 'number') return status
+    }
+  }
+  return undefined
 }
 
 interface AuthState {
@@ -62,7 +77,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Return the user data so the login page can handle role-based redirect
       return data.user
     } catch (err: unknown) {
-      const msg = extractMessage(err, 'Login failed')
+      const status = extractStatus(err)
+      let msg = extractMessage(err, 'Login failed')
+      if (status === 401) {
+        msg = 'Incorrect email or password.'
+      }
       set({ isLoading: false, error: msg })
       throw new Error(msg)
     }
