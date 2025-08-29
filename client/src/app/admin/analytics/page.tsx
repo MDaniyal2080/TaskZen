@@ -132,8 +132,8 @@ export default function AnalyticsPage() {
     
     return (
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-2 sm:mb-4">
             <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 ${color}`}>
               <Icon className="w-5 h-5" />
             </div>
@@ -145,8 +145,8 @@ export default function AnalyticsPage() {
             )}
           </div>
           <div>
-            <p className="text-2xl font-bold">{value}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{title}</p>
+            <p className="text-lg sm:text-2xl font-bold">{value}</p>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">{title}</p>
           </div>
         </CardContent>
       </Card>
@@ -208,7 +208,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
           <StatCard
             title="Total Users"
             value={analytics.overview.totalUsers.toLocaleString()}
@@ -244,7 +244,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Detailed Metrics */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-8">
           {/* User Activity Chart */}
           <Card>
             <CardHeader>
@@ -306,52 +306,44 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Revenue Metrics */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Revenue Analytics</CardTitle>
-            <CardDescription>Subscription and revenue performance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">MRR</p>
-                <p className="text-2xl font-bold">${analytics.revenue.mrr.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">ARR</p>
-                <p className="text-2xl font-bold">${analytics.revenue.arr.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Pro Users</p>
-                <p className="text-2xl font-bold">{analytics.overview.proUsers}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Churn Rate</p>
-                <p className="text-2xl font-bold">{Number(analytics.revenue?.churnRate ?? 0).toFixed(1)}%</p>
-              </div>
-            </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
+          <div>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">MRR</p>
+            <p className="text-lg sm:text-2xl font-bold">${analytics.revenue.mrr.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">ARR</p>
+            <p className="text-lg sm:text-2xl font-bold">${analytics.revenue.arr.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Pro Users</p>
+            <p className="text-lg sm:text-2xl font-bold">{analytics.overview.proUsers}</p>
+          </div>
+          <div>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Churn Rate</p>
+            <p className="text-lg sm:text-2xl font-bold">{Number(analytics.revenue?.churnRate ?? 0).toFixed(1)}%</p>
+          </div>
+        </div>
 
-            {/* Monthly Revenue Chart */}
-            <div className="h-48 sm:h-64 flex items-end justify-between gap-1 sm:gap-2">
-              {analytics.revenue.monthly.map((month, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center">
-                  <div
-                    className="w-full bg-gradient-to-t from-green-600 to-emerald-400 rounded-t hover:opacity-80 transition-opacity"
-                    style={{
-                      height: `${(month.amount / Math.max(1, ...analytics.revenue.monthly.map(m => m.amount))) * 100}%`,
-                      minHeight: '4px'
-                    }}
-                    title={`${month.month}: $${month.amount}`}
-                  />
-                  <span className="text-xs text-gray-500 mt-1">{month.month.slice(0, 3)}</span>
-                </div>
-              ))}
+        {/* Monthly Revenue Chart */}
+        <div className="h-48 sm:h-64 flex items-end justify-between gap-1 sm:gap-2">
+          {analytics.revenue.monthly.map((month, i) => (
+            <div key={i} className="flex-1 flex flex-col items-center">
+              <div
+                className="w-full bg-gradient-to-t from-green-600 to-emerald-400 rounded-t hover:opacity-80 transition-opacity"
+                style={{
+                  height: `${(month.amount / Math.max(1, ...analytics.revenue.monthly.map(m => m.amount))) * 100}%`,
+                  minHeight: '4px'
+                }}
+                title={`${month.month}: $${month.amount}`}
+              />
+              <span className="text-xs text-gray-500 mt-1">{month.month.slice(0, 3)}</span>
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
 
-        {/* Additional Insights */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Additional Charts */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Completion Rate */}
           <Card>
             <CardHeader>

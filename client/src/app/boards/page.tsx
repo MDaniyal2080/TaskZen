@@ -128,12 +128,12 @@ export default function BoardsPage() {
   return (
     <div className="min-h-screen p-6  from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       <div className="mx-auto max-w-6xl">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Your Boards</h1>
-            <p className="text-sm text-muted-foreground">Browse and open your boards</p>
+            <h1 className="text-xl sm:text-2xl font-bold">Your Boards</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Browse and open your boards</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <Button onClick={() => router.push('/')}>Home</Button>
             {user?.role === 'ADMIN' && (
               <Button variant="outline" onClick={() => router.push('/admin')}>Admin Dashboard</Button>
@@ -147,7 +147,7 @@ export default function BoardsPage() {
 
         {!user?.isPro && (
           <Card className="mb-6 border-dashed border-violet-300/60 bg-violet-50/50 dark:bg-violet-950/20">
-            <CardContent className="py-4 flex items-center justify-between gap-4">
+            <CardContent className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <Crown className="h-5 w-5 text-violet-600" />
                 <div>
@@ -175,7 +175,7 @@ export default function BoardsPage() {
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-3 gap-1">
                   <TabsTrigger value="basic">Basic</TabsTrigger>
                   <TabsTrigger value="template">Template</TabsTrigger>
                   <TabsTrigger value="customize">Customize</TabsTrigger>
@@ -339,7 +339,7 @@ export default function BoardsPage() {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {isLoading && (
             <Card className="col-span-full">
               <CardContent className="py-10 flex items-center justify-center text-muted-foreground">

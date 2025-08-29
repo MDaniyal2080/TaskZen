@@ -250,8 +250,8 @@ export default function SettingsPage() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Settings</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Settings</h1>
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Manage your account settings and preferences
           </p>
         </div>
@@ -259,8 +259,8 @@ export default function SettingsPage() {
         {/* Pro Status Card */}
         {user && (
           <Card className="mb-6 border-gradient-to-r from-violet-500 to-cyan-500">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className={`p-3 rounded-xl ${user.isPro ? 'bg-gradient-to-r from-violet-600 to-cyan-600' : 'bg-gray-200 dark:bg-gray-800'}`}>
                     <Crown className={`w-6 h-6 ${user.isPro ? 'text-white' : 'text-gray-500'}`} />
@@ -303,21 +303,21 @@ export default function SettingsPage() {
 
         {/* Settings Tabs */}
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid grid-cols-4 w-full max-w-md">
-            <TabsTrigger value="profile">
-              <User className="w-4 h-4 mr-2" />
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full max-w-md gap-1">
+            <TabsTrigger value="profile" className="text-xs sm:text-sm">
+              <User className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
               Profile
             </TabsTrigger>
-            <TabsTrigger value="appearance">
-              <Palette className="w-4 h-4 mr-2" />
+            <TabsTrigger value="appearance" className="text-xs sm:text-sm">
+              <Palette className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
               Theme
             </TabsTrigger>
-            <TabsTrigger value="notifications">
-              <Bell className="w-4 h-4 mr-2" />
+            <TabsTrigger value="notifications" className="text-xs sm:text-sm">
+              <Bell className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
               Alerts
             </TabsTrigger>
-            <TabsTrigger value="security">
-              <Shield className="w-4 h-4 mr-2" />
+            <TabsTrigger value="security" className="text-xs sm:text-sm">
+              <Shield className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
               Security
             </TabsTrigger>
           </TabsList>
@@ -359,7 +359,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Form Fields */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="firstName">First Name</Label>
                     <Input

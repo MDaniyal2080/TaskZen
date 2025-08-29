@@ -376,35 +376,36 @@ export default function AdminSettingsPage() {
 
         {/* Settings Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 w-full gap-1">
-            <TabsTrigger value="general" className="text-xs sm:text-sm">
-              <Settings className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+          <TabsList className="flex flex-wrap w-full">
+            <TabsTrigger value="general" className="flex-1 min-w-[80px] text-xs sm:text-sm">
+              <Settings className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
               <span className="hidden sm:inline">General</span>
               <span className="sm:hidden">Gen</span>
             </TabsTrigger>
-            <TabsTrigger value="features" className="text-xs sm:text-sm">
-              <ToggleLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+            <TabsTrigger value="features" className="flex-1 min-w-[80px] text-xs sm:text-sm">
+              <ToggleLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
               <span className="hidden sm:inline">Features</span>
               <span className="sm:hidden">Feat</span>
             </TabsTrigger>
-            <TabsTrigger value="security" className="text-xs sm:text-sm">
-              <Shield className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+            <TabsTrigger value="security" className="flex-1 min-w-[80px] text-xs sm:text-sm">
+              <Shield className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
               <span className="hidden sm:inline">Security</span>
               <span className="sm:hidden">Sec</span>
             </TabsTrigger>
-            <TabsTrigger value="email" className="text-xs sm:text-sm">
-              <Mail className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-              Email
+            <TabsTrigger value="email" className="flex-1 min-w-[80px] text-xs sm:text-sm">
+              <Mail className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+              <span className="hidden sm:inline">Email</span>
+              <span className="sm:hidden">Mail</span>
             </TabsTrigger>
-            <TabsTrigger value="payments" className="text-xs sm:text-sm">
-              <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+            <TabsTrigger value="payments" className="flex-1 min-w-[80px] text-xs sm:text-sm">
+              <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
               <span className="hidden sm:inline">Payments</span>
               <span className="sm:hidden">Pay</span>
             </TabsTrigger>
-            <TabsTrigger value="maintenance" className="text-xs sm:text-sm">
-              <Wrench className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+            <TabsTrigger value="maintenance" className="flex-1 min-w-[80px] text-xs sm:text-sm">
+              <Wrench className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
               <span className="hidden sm:inline">Maintenance</span>
-              <span className="sm:hidden">Maint</span>
+              <span className="sm:hidden">Main</span>
             </TabsTrigger>
           </TabsList>
 

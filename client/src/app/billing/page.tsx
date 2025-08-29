@@ -107,8 +107,8 @@ export default function BillingPage() {
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-10">
-            <h1 className="text-4xl font-bold mb-3">Choose Your Plan</h1>
-            <p className="text-gray-600 dark:text-gray-400">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3">Choose Your Plan</h1>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Unlock advanced features and take your productivity to the next level
             </p>
           </div>
@@ -117,7 +117,7 @@ export default function BillingPage() {
           {user && (
             <Card className="mb-8">
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                   <div>
                     <CardTitle className="text-lg">Current Subscription</CardTitle>
                     <CardDescription>Your active plan and billing details</CardDescription>
@@ -157,15 +157,15 @@ export default function BillingPage() {
           )}
 
           {/* Pricing Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-10">
             {/* Free Plan */}
             <Card className={!isPro ? 'border-violet-500 shadow-lg' : ''}>
               <CardHeader>
                 <CardTitle className="text-xl">Free</CardTitle>
                 <CardDescription>Perfect for personal use</CardDescription>
                 <div className="mt-4">
-                  <span className="text-3xl font-bold">$0</span>
-                  <span className="text-gray-600 dark:text-gray-400">/month</span>
+                  <span className="text-2xl sm:text-3xl font-bold">$0</span>
+                  <span className="text-sm sm:text-base text-gray-600 dark:text-gray-400">/month</span>
                 </div>
               </CardHeader>
               <CardContent>
@@ -206,7 +206,7 @@ export default function BillingPage() {
             </Card>
 
             {/* Pro Monthly */}
-            <Card className="border-violet-500 shadow-xl scale-105">
+            <Card className="border-violet-500 shadow-xl sm:scale-105 sm:col-span-2 lg:col-span-1">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-xl">Pro Monthly</CardTitle>
@@ -214,8 +214,8 @@ export default function BillingPage() {
                 </div>
                 <CardDescription>For teams and professionals</CardDescription>
                 <div className="mt-4">
-                  <span className="text-3xl font-bold">{fmt.format(monthlyPrice)}</span>
-                  <span className="text-gray-600 dark:text-gray-400">/month</span>
+                  <span className="text-2xl sm:text-3xl font-bold">{fmt.format(monthlyPrice)}</span>
+                  <span className="text-sm sm:text-base text-gray-600 dark:text-gray-400">/month</span>
                 </div>
               </CardHeader>
               <CardContent>
