@@ -1044,8 +1044,8 @@ export function Board({ boardId }: BoardProps) {
         )}
       </div>
 
-      {/* Content Container */}
-      <div className={cn("h-[calc(100%-120px)] overflow-x-auto overflow-y-auto custom-scrollbar pr-2 snap-x snap-mandatory md:snap-none", compact ? 'p-3' : 'p-6')}>
+      {/* Main Board Container */}
+      <div className={cn("flex-1 px-2 sm:px-4 py-2 sm:py-4 overflow-hidden bg-gradient-to-br", compact ? 'p-3' : 'p-6')}>
         {viewMode === 'calendar' ? (
           <CalendarView
             boardId={boardId}
@@ -1067,11 +1067,7 @@ export function Board({ boardId }: BoardProps) {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className={cn(
-            "h-full flex md:grid",
-            compact ? 'gap-3 md:gap-4' : 'gap-6 md:gap-7',
-            "md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-          )}>
+          <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-4 px-2 sm:px-0 -mx-2 sm:mx-0">
             <SortableContext items={lists.map(l => l.id)} strategy={horizontalListSortingStrategy}>
               {lists.map((list) => (
                 <List
@@ -1083,7 +1079,7 @@ export function Board({ boardId }: BoardProps) {
             </SortableContext>
 
             {/* Add List Button */}
-            <div className="w-full min-w-[86vw] sm:min-w-[20rem] md:min-w-0 shrink-0 md:shrink snap-start">
+            <div className="w-64 sm:w-72 flex-shrink-0">
               {showAddList ? (
                 <div className="bg-white dark:bg-slate-800 rounded-lg p-3 shadow-sm">
                   <input

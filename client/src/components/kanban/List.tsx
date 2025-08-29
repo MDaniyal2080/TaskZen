@@ -13,7 +13,6 @@ import { Card } from './Card';
 import toast from 'react-hot-toast';
 import { useBoardStore } from '@/store/board-store';
 import { createPortal } from 'react-dom';
-import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 import type { List as ListType } from '@/shared/types';
 import type { CardView } from '@/types/kanban';
@@ -33,8 +32,6 @@ interface ListProps {
 
 export function List({ list, cards }: ListProps) {
   const { createCard, updateList, deleteList } = useBoardStore();
-  const { user } = useAuthStore();
-  const compact = !!user?.uiPreferences?.board?.compactCardView;
   const [showAddCard, setShowAddCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -165,58 +162,59 @@ export function List({ list, cards }: ListProps) {
   const sortedCards = [...cards].sort((a, b) => a.position - b.position);
   const cardIds = sortedCards.map(card => card.id);
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   return (
     <div
-      ref={setNodeRef}
-      className="md:w-full w-auto shrink-0 md:shrink min-w-[86vw] sm:min-w-[22rem] md:min-w-0 snap-start bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-lg shadow-md border border-slate-200 dark:border-slate-600 h-fit max-h-full flex flex-col"
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.6 : undefined,
+      ref={(node) => {
+        setNodeRef(node);
+        setDroppableNodeRef(node);
       }}
+      style={style}
+      className={cn(
+        "bg-slate-50 dark:bg-slate-800 rounded-lg p-2 sm:p-3 w-64 sm:w-72 flex-shrink-0",
+        isDragging && "opacity-50"
+      )}
     >
       {/* List Header */}
-      <div
-        className={cn("border-b border-slate-200 dark:border-slate-600 cursor-grab active:cursor-grabbing", compact ? 'p-2' : 'p-3')}
-        {...attributes}
-        {...listeners}
-      >
-        <div className="flex items-center justify-between">
-          {isEditingTitle ? (
-            <input
-              type="text"
-              value={listTitle}
-              onChange={(e) => setListTitle(e.target.value)}
-              onBlur={handleUpdateTitle}
-              onKeyPress={(e) => e.key === 'Enter' && handleUpdateTitle()}
-              className="flex-1 px-2 py-1 bg-transparent border border-indigo-500 rounded text-slate-900 dark:text-white font-semibold focus:outline-none"
-              autoFocus
-            />
-          ) : (
-            <h3
-              onClick={() => setIsEditingTitle(true)}
-              className="font-semibold text-slate-900 dark:text-white cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-1"
-            >
-              {list.title}
-              <span className="text-slate-500 dark:text-slate-400 text-sm ml-1">
-                ({cards.length})
-              </span>
-            </h3>
-          )}
-          <div className="relative">
-            <button
-              ref={menuBtnRef}
-              onClick={() => setShowMenu(!showMenu)}
-              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-600 rounded transition-colors"
-            >
-              <MoreHorizontal className="w-4 h-4 text-slate-600 dark:text-slate-300" />
-            </button>
-          </div>
+      <div className="flex items-center justify-between mb-2 sm:mb-3" {...attributes} {...listeners}>
+        {isEditingTitle ? (
+          <input
+            type="text"
+            value={listTitle}
+            onChange={(e) => setListTitle(e.target.value)}
+            onBlur={handleUpdateTitle}
+            onKeyPress={(e) => e.key === 'Enter' && handleUpdateTitle()}
+            className="flex-1 px-2 py-1 bg-transparent border border-indigo-500 rounded text-slate-900 dark:text-white font-semibold focus:outline-none"
+            autoFocus
+          />
+        ) : (
+          <h3
+            onClick={() => setIsEditingTitle(true)}
+            className="font-medium text-sm sm:text-base text-slate-900 dark:text-white"
+          >
+            {list.title}
+            <span className="ml-1 sm:ml-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              ({cards.length})
+            </span>
+          </h3>
+        )}
+        <div className="relative">
+          <button
+            ref={menuBtnRef}
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-600 rounded transition-colors"
+          >
+            <MoreHorizontal className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+          </button>
         </div>
       </div>
 
       {/* Cards Container */}
-      <div ref={setDroppableNodeRef} className={cn("flex-1 overflow-y-auto min-h-[100px] custom-scrollbar pr-1", compact ? 'p-1.5 space-y-1' : 'p-2 space-y-2')}>
+      <div className="space-y-1.5 sm:space-y-2 mb-2 max-h-[calc(100vh-280px)] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
         <SortableContext id={list.id} items={cardIds} strategy={verticalListSortingStrategy}>
           {sortedCards.map((card) => (
             <Card key={card.id} card={card} />

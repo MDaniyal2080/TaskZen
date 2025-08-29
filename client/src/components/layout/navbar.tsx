@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth'
-import { Moon, Sun, LogIn, LogOut, LayoutDashboard, Home, KanbanSquare, Calendar, Settings, CreditCard, Sparkles, Menu, X } from 'lucide-react'
+import { Moon, Sun, LogIn, LogOut, LayoutDashboard, Home, KanbanSquare, Calendar, Settings, CreditCard, Sparkles, Menu, X, Users, Shield, BarChart3, ChevronRight } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useSettings } from '@/contexts/SettingsContext'
 
@@ -50,6 +50,7 @@ export function Navbar() {
   const { user, logout } = useAuthStore()
   const { settings } = useSettings()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [adminSubmenuOpen, setAdminSubmenuOpen] = useState(false)
 
   const onLogout = () => {
     logout()
@@ -60,7 +61,9 @@ export function Navbar() {
   useEffect(() => {
     // Always close on route change; avoid referencing mobileOpen to satisfy hook deps
     setMobileOpen(false)
+    setAdminSubmenuOpen(false)
   }, [pathname])
+
 
   return (
     <>
@@ -129,33 +132,70 @@ export function Navbar() {
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <div className="absolute top-14 inset-x-0 bg-background border-t shadow-md">
-            <nav className="container mx-auto px-4 py-3 flex flex-col gap-1" onClick={() => setMobileOpen(false)}>
+          <div className="absolute top-14 inset-x-0 bg-background border-t shadow-md max-h-[calc(100vh-3.5rem)] overflow-y-auto">
+            <nav className="container mx-auto px-4 py-3 flex flex-col gap-1">
               {user?.role === 'ADMIN' ? (
-                <Link href="/admin" className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2">
-                  <LayoutDashboard className="h-4 w-4" /> Admin Panel
-                </Link>
+                <>
+                  {/* Admin submenu toggle */}
+                  <button
+                    onClick={() => setAdminSubmenuOpen(!adminSubmenuOpen)}
+                    className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center justify-between w-full hover:bg-accent"
+                  >
+                    <span className="flex items-center gap-2">
+                      <LayoutDashboard className="h-4 w-4" /> Admin Panel
+                    </span>
+                    <ChevronRight className={`h-4 w-4 transition-transform ${adminSubmenuOpen ? 'rotate-90' : ''}`} />
+                  </button>
+                  
+                  {/* Admin submenu items */}
+                  {adminSubmenuOpen && (
+                    <div className="ml-6 flex flex-col gap-1">
+                      <Link href="/admin" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
+                        <LayoutDashboard className="h-4 w-4" /> Dashboard
+                      </Link>
+                      <Link href="/admin/users" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
+                        <Users className="h-4 w-4" /> User Management
+                      </Link>
+                      <Link href="/admin/moderation" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
+                        <Shield className="h-4 w-4" /> Content Moderation
+                      </Link>
+                      <Link href="/admin/analytics" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
+                        <BarChart3 className="h-4 w-4" /> Analytics & Reports
+                      </Link>
+                      <Link href="/admin/settings" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
+                        <Settings className="h-4 w-4" /> System Settings
+                      </Link>
+                    </div>
+                  )}
+                  
+                  {/* Regular nav items for admin */}
+                  <div className="border-t mt-2 pt-2">
+                    <Link href="/" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
+                      <Home className="h-4 w-4" /> Back to App
+                    </Link>
+                  </div>
+                </>
               ) : (
                 <>
-                  <Link href="/" className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2">
+                  <Link href="/" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
                     <Home className="h-4 w-4" /> Home
                   </Link>
-                  <Link href="/boards" className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2">
+                  <Link href="/boards" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
                     <KanbanSquare className="h-4 w-4" /> Boards
                   </Link>
                   {user && (
                     <>
-                      <Link href="/calendar" className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2">
+                      <Link href="/calendar" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
                         <Calendar className="h-4 w-4" /> Calendar
                       </Link>
-                      <Link href="/settings" className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2">
+                      <Link href="/settings" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
                         <Settings className="h-4 w-4" /> Settings
                       </Link>
-                      <Link href="/billing" className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2">
+                      <Link href="/billing" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
                         <CreditCard className="h-4 w-4" /> Billing
                       </Link>
                       {!user.isPro && (
-                        <Link href="/upgrade" className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2">
+                        <Link href="/upgrade" onClick={() => setMobileOpen(false)} className="text-sm px-2 py-2 rounded-md transition-colors text-foreground flex items-center gap-2 hover:bg-accent">
                           <Sparkles className="h-4 w-4" /> Upgrade
                         </Link>
                       )}

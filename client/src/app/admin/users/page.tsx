@@ -536,17 +536,132 @@ export default function UsersManagementPage() {
         <TabsContent value="users">
           <Card>
             <CardContent className="p-0">
-              {/* Users Table */}
-              <div className="rounded-md border overflow-x-auto">
+              {/* Users Table - Responsive */}
+              <div className="rounded-md border">
+                {/* Mobile View - Cards */}
+                <div className="md:hidden">
+                  {paginatedUsers.map((user) => (
+                    <div key={user.id} className="p-4 border-b last:border-b-0">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-sm text-muted-foreground">{user.email}</div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedUser(user)
+                              setShowActivityDialog(true)
+                            }}>
+                              <Activity className="h-4 w-4 mr-2" />
+                              View Activity
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedUser(user)
+                              setSubType(user.subscription.type)
+                              setSubBilling((user.subscription.billingCycle as 'MONTHLY' | 'YEARLY') || 'YEARLY')
+                              setSubStatus(user.subscription.status)
+                              setShowSubscriptionDialog(true)
+                            }}>
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              Manage Subscription
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => upgradeProMutation.mutate(user.id)}>
+                              <Crown className="h-4 w-4 mr-2" />
+                              {user.subscription.type !== 'PRO' ? 'Upgrade to Pro' : 'Extend Pro'}
+                            </DropdownMenuItem>
+                            {user.role !== 'ADMIN' ? (
+                              <DropdownMenuItem onClick={() => makeAdminMutation.mutate(user.id)}>
+                                <Shield className="h-4 w-4 mr-2" />
+                                Make Admin
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => removeAdminMutation.mutate(user.id)}>
+                                <Shield className="h-4 w-4 mr-2" />
+                                Remove Admin
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            {user.status === 'ACTIVE' ? (
+                              <DropdownMenuItem onClick={() => deactivateMutation.mutate(user.id)}>
+                                <UserX className="h-4 w-4 mr-2" />
+                                Suspend User
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => activateMutation.mutate(user.id)}>
+                                <UserCheck className="h-4 w-4 mr-2" />
+                                Activate User
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() => {
+                                if (window.confirm(`Delete ${user.name}? This action cannot be undone.`)) {
+                                  deleteUserMutation.mutate(user.id)
+                                }
+                              }}
+                              className="text-red-600 focus:text-red-700"
+                            >
+                              <Ban className="h-4 w-4 mr-2" />
+                              Delete User
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Role:</span>
+                          <Badge variant={user.role === 'ADMIN' ? 'default' : 'secondary'} className="ml-2">
+                            {user.role === 'ADMIN' && <Shield className="h-3 w-3 mr-1" />}
+                            {user.role}
+                          </Badge>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Status:</span>
+                          <Badge 
+                            variant={
+                              user.status === 'ACTIVE' ? 'default' :
+                              user.status === 'INACTIVE' ? 'secondary' : 'destructive'
+                            }
+                            className="ml-2"
+                          >
+                            {user.status}
+                          </Badge>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Plan:</span>
+                          <Badge variant="outline" className="ml-2">
+                            {user.subscription.type}
+                          </Badge>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Activity:</span>
+                          <span className="ml-2">{user.boardsCount} boards, {user.tasksCount} tasks</span>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        Joined {format(new Date(user.createdAt), 'MMM d, yyyy')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Desktop View - Table */}
+                <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>User</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Subscription</TableHead>
-                      <TableHead>Activity</TableHead>
-                      <TableHead>Joined</TableHead>
+                      <TableHead className="hidden sm:table-cell">Role</TableHead>
+                      <TableHead className="hidden lg:table-cell">Status</TableHead>
+                      <TableHead className="hidden xl:table-cell">Subscription</TableHead>
+                      <TableHead className="hidden lg:table-cell">Activity</TableHead>
+                      <TableHead className="hidden sm:table-cell">Joined</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -559,13 +674,13 @@ export default function UsersManagementPage() {
                             <div className="text-sm text-muted-foreground">{user.email}</div>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <Badge variant={user.role === 'ADMIN' ? 'default' : 'secondary'}>
                             {user.role === 'ADMIN' && <Shield className="h-3 w-3 mr-1" />}
                             {user.role}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <Badge 
                             variant={
                               user.status === 'ACTIVE' ? 'default' :
@@ -575,7 +690,7 @@ export default function UsersManagementPage() {
                             {user.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden xl:table-cell">
                           <div className="flex items-center gap-1">
                             {user.subscription.type === 'PRO' && <Crown className="h-3 w-3 text-yellow-500" />}
                             {user.subscription.type === 'ENTERPRISE' && <Star className="h-3 w-3 text-purple-500" />}
@@ -584,14 +699,14 @@ export default function UsersManagementPage() {
                             </Badge>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <div className="flex items-center gap-2">
                             <span className="text-sm">{user.boardsCount} boards</span>
                             <span className="text-sm text-muted-foreground">•</span>
                             <span className="text-sm">{user.tasksCount} tasks</span>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <div className="text-sm">
                             {format(new Date(user.createdAt), 'MMM d, yyyy')}
                           </div>
@@ -673,15 +788,10 @@ export default function UsersManagementPage() {
                   </TableBody>
                 </Table>
               </div>
-
-              {/* Pagination */}
+              </div>
               <div className="flex items-center justify-between px-4 py-4">
                 <div className="text-sm text-muted-foreground">
-                  {(() => {
-                    const start = (currentPage - 1) * itemsPerPage
-                    const end = start + paginatedUsers.length
-                    return `Showing ${filteredUsers.length ? start + 1 : 0} to ${end} of ${filteredUsers.length} users`
-                  })()}
+                  Page {currentPage} of {totalPages || 1}
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -693,9 +803,6 @@ export default function UsersManagementPage() {
                     <ChevronLeft className="h-4 w-4" />
                     Previous
                   </Button>
-                  <div className="text-sm">
-                    Page {currentPage} of {totalPages || 1}
-                  </div>
                   <Button
                     variant="outline"
                     size="sm"

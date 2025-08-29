@@ -351,7 +351,7 @@ export function Card({ card, isDragging = false }: CardProps) {
       onDoubleClick={() => setShowDetail(true)}
       className={cn(
         "w-full bg-white dark:bg-slate-700 rounded-lg cursor-pointer border border-slate-200 dark:border-slate-600 group",
-        compact ? 'p-2' : 'p-3',
+        compact ? 'p-2' : 'p-2 sm:p-3',
         anims ? 'hover:shadow-md transition-all' : 'transition-none',
         card.isCompleted && "opacity-60"
       )}
@@ -415,9 +415,9 @@ export function Card({ card, isDragging = false }: CardProps) {
       )}
 
       {/* Card Header */}
-      <div className="flex items-start justify-between mb-2">
+      <div className="flex items-start justify-between mb-1 sm:mb-2">
         <h4 className={cn(
-          "text-sm font-medium text-slate-900 dark:text-white flex-1",
+          "text-xs sm:text-sm font-medium text-slate-900 dark:text-white flex-1 break-words",
           card.isCompleted && "line-through text-slate-500 dark:text-slate-400"
         )}>
           {card.title}
@@ -438,7 +438,7 @@ export function Card({ card, isDragging = false }: CardProps) {
 
       {/* Card Description */}
       {!compact && card.description && (
-        <p className="text-xs text-slate-600 dark:text-slate-400 mb-2 line-clamp-2">
+        <p className="text-[10px] sm:text-xs text-slate-600 dark:text-slate-400 mb-1 sm:mb-2 line-clamp-2">
           {card.description}
         </p>
       )}
@@ -446,7 +446,7 @@ export function Card({ card, isDragging = false }: CardProps) {
       {/* Labels moved above title */}
 
       {/* Card Footer */}
-      <div className="flex items-center justify-between mt-2">
+      <div className="flex items-center justify-between mt-1 sm:mt-2 gap-1">
         <div className={cn("flex items-center", compact ? 'gap-2' : 'gap-3')}>
           {/* Due Date */}
           {card.dueDate && (
