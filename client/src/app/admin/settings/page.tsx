@@ -310,14 +310,14 @@ export default function AdminSettingsPage() {
     <div className="min-h-screen  from-slate-50 via-white to-violet-50 dark:from-slate-950 dark:via-slate-900 dark:to-violet-950">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2">System Settings</h1>
-            <p className="text-gray-600 dark:text-gray-400">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">System Settings</h1>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Configure system-wide settings and feature flags
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap w-full sm:w-auto">
             <Button
               variant="outline"
               onClick={() => document.getElementById('import-settings')?.click()}
@@ -376,30 +376,35 @@ export default function AdminSettingsPage() {
 
         {/* Settings Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-6 w-full">
-            <TabsTrigger value="general">
-              <Settings className="w-4 h-4 mr-2" />
-              General
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 w-full gap-1">
+            <TabsTrigger value="general" className="text-xs sm:text-sm">
+              <Settings className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">General</span>
+              <span className="sm:hidden">Gen</span>
             </TabsTrigger>
-            <TabsTrigger value="features">
-              <ToggleLeft className="w-4 h-4 mr-2" />
-              Features
+            <TabsTrigger value="features" className="text-xs sm:text-sm">
+              <ToggleLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Features</span>
+              <span className="sm:hidden">Feat</span>
             </TabsTrigger>
-            <TabsTrigger value="security">
-              <Shield className="w-4 h-4 mr-2" />
-              Security
+            <TabsTrigger value="security" className="text-xs sm:text-sm">
+              <Shield className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Security</span>
+              <span className="sm:hidden">Sec</span>
             </TabsTrigger>
-            <TabsTrigger value="email">
-              <Mail className="w-4 h-4 mr-2" />
+            <TabsTrigger value="email" className="text-xs sm:text-sm">
+              <Mail className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
               Email
             </TabsTrigger>
-            <TabsTrigger value="payments">
-              <CreditCard className="w-4 h-4 mr-2" />
-              Payments
+            <TabsTrigger value="payments" className="text-xs sm:text-sm">
+              <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Payments</span>
+              <span className="sm:hidden">Pay</span>
             </TabsTrigger>
-            <TabsTrigger value="maintenance">
-              <Wrench className="w-4 h-4 mr-2" />
-              Maintenance
+            <TabsTrigger value="maintenance" className="text-xs sm:text-sm">
+              <Wrench className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Maintenance</span>
+              <span className="sm:hidden">Maint</span>
             </TabsTrigger>
           </TabsList>
 
@@ -413,7 +418,7 @@ export default function AdminSettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Site Name</Label>
                     <Input
@@ -435,7 +440,7 @@ export default function AdminSettingsPage() {
                 
                 <div>
                   <h4 className="font-semibold mb-3">User Limits</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label>Max Boards per User (Free)</Label>
                       <Input
@@ -577,7 +582,7 @@ export default function AdminSettingsPage() {
                 
                 <Separator />
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Session Timeout (minutes)</Label>
                     <Input
@@ -648,7 +653,7 @@ export default function AdminSettingsPage() {
                 
                 {settings.email.enabled && (
                   <>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label>Email Provider</Label>
                         <select
@@ -783,7 +788,7 @@ export default function AdminSettingsPage() {
                 
                 {settings.payments.enabled && (
                   <>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label>Payment Provider</Label>
                         <select

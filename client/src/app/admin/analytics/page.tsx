@@ -157,14 +157,14 @@ export default function AnalyticsPage() {
     <div className="min-h-screen  from-slate-50 via-white to-violet-50 dark:from-slate-950 dark:via-slate-900 dark:to-violet-950">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8 flex-wrap gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Analytics Dashboard</h1>
-            <p className="text-gray-600 dark:text-gray-400">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">Analytics Dashboard</h1>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Comprehensive insights into your platform performance
             </p>
           </div>
-          <div className="flex gap-2 flex-wrap w-full sm:w-auto justify-end">
+          <div className="flex gap-2 flex-wrap w-full sm:w-auto">
             <Button
               variant="outline"
               onClick={() => refetch()}
@@ -252,7 +252,7 @@ export default function AnalyticsPage() {
               <CardDescription>Daily active users over time</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-64 flex items-end justify-between gap-2">
+              <div className="h-48 sm:h-64 flex items-end justify-between gap-1 sm:gap-2">
                 {analytics.userActivity.daily.slice(-14).map((day, i) => (
                   <div
                     key={i}
@@ -312,7 +312,7 @@ export default function AnalyticsPage() {
             <CardDescription>Subscription and revenue performance</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-6">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">MRR</p>
                 <p className="text-2xl font-bold">${analytics.revenue.mrr.toLocaleString()}</p>
@@ -332,7 +332,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Monthly Revenue Chart */}
-            <div className="h-64 flex items-end justify-between gap-2">
+            <div className="h-48 sm:h-64 flex items-end justify-between gap-1 sm:gap-2">
               {analytics.revenue.monthly.map((month, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center">
                   <div
