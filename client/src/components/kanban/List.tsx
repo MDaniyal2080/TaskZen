@@ -175,7 +175,7 @@ export function List({ list, cards }: ListProps) {
       }}
       style={style}
       className={cn(
-        "bg-card text-card-foreground border rounded-lg p-2 sm:p-3 w-64 sm:w-72 flex-shrink-0 shadow-sm hover:shadow-md transition-shadow",
+        "bg-slate-50 dark:bg-slate-800 rounded-lg p-2 sm:p-3 w-64 sm:w-72 flex-shrink-0",
         isDragging && "opacity-50"
       )}
     >
@@ -188,16 +188,16 @@ export function List({ list, cards }: ListProps) {
             onChange={(e) => setListTitle(e.target.value)}
             onBlur={handleUpdateTitle}
             onKeyPress={(e) => e.key === 'Enter' && handleUpdateTitle()}
-            className="flex-1 px-2 py-1 bg-transparent border border-primary rounded text-foreground font-semibold focus:outline-none"
+            className="flex-1 px-2 py-1 bg-transparent border border-indigo-500 rounded text-slate-900 dark:text-white font-semibold focus:outline-none"
             autoFocus
           />
         ) : (
           <h3
             onClick={() => setIsEditingTitle(true)}
-            className="font-medium text-sm sm:text-base text-foreground"
+            className="font-medium text-sm sm:text-base text-slate-900 dark:text-white"
           >
             {list.title}
-            <span className="ml-1 sm:ml-2 text-xs sm:text-sm text-muted-foreground">
+            <span className="ml-1 sm:ml-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               ({cards.length})
             </span>
           </h3>
@@ -206,15 +206,15 @@ export function List({ list, cards }: ListProps) {
           <button
             ref={menuBtnRef}
             onClick={() => setShowMenu(!showMenu)}
-            className="p-1 hover:bg-accent rounded transition-colors"
+            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-600 rounded transition-colors"
           >
-            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+            <MoreHorizontal className="w-4 h-4 text-slate-600 dark:text-slate-300" />
           </button>
         </div>
       </div>
 
       {/* Cards Container */}
-      <div className="space-y-1.5 sm:space-y-2 mb-2 max-h-[calc(100vh-280px)] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+      <div className="space-y-1.5 sm:space-y-2 mb-2 max-h-[calc(100vh-280px)] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
         <SortableContext id={list.id} items={cardIds} strategy={verticalListSortingStrategy}>
           {sortedCards.map((card) => (
             <Card key={card.id} card={card} />
@@ -223,28 +223,28 @@ export function List({ list, cards }: ListProps) {
 
         {/* Add Card Form */}
         {showAddCard ? (
-          <div className="bg-secondary rounded-lg p-2">
+          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-2">
             <textarea
               placeholder="Enter a title for this card..."
               value={newCardTitle}
               onChange={(e) => setNewCardTitle(e.target.value)}
-              className="w-full px-2 py-1 bg-card border rounded text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              className="w-full px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
               rows={3}
               autoFocus
             />
             <div className="flex gap-2 mt-2">
               <button
                 onClick={handleAddCard}
-                className="px-3 py-1 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 transition-colors"
+                className="px-3 py-1 bg-indigo-500 text-white text-sm rounded hover:bg-indigo-600 transition-colors"
               >
-                Add card
+                Add Card
               </button>
               <button
                 onClick={() => {
                   setShowAddCard(false);
                   setNewCardTitle('');
                 }}
-                className="px-3 py-1 text-muted-foreground text-sm hover:text-foreground transition-colors"
+                className="px-3 py-1 text-slate-600 dark:text-slate-400 text-sm hover:text-slate-900 dark:hover:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -253,7 +253,7 @@ export function List({ list, cards }: ListProps) {
         ) : (
           <button
             onClick={() => setShowAddCard(true)}
-            className="w-full flex items-center gap-2 p-2 text-muted-foreground hover:bg-accent rounded-lg transition-colors"
+            className="w-full flex items-center gap-2 p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span className="text-sm">Add a card</span>
@@ -264,7 +264,7 @@ export function List({ list, cards }: ListProps) {
       {showMenu && menuPos && createPortal(
         <div
           ref={menuRef}
-          className="w-48 bg-popover text-popover-foreground rounded-lg shadow-lg border z-[2147483647]"
+          className="w-48 bg-white dark:bg-slate-700 rounded-lg shadow-lg border border-slate-200 dark:border-slate-600 z-[2147483647]"
           style={{ position: 'fixed', top: menuPos!.top, right: menuPos!.right }}
           role="menu"
         >
@@ -273,7 +273,7 @@ export function List({ list, cards }: ListProps) {
               setIsEditingTitle(true);
               setShowMenu(false);
             }}
-            className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent flex items-center gap-2"
+            className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 flex items-center gap-2"
           >
             <Edit2 className="w-4 h-4" />
             Edit Title
@@ -283,7 +283,7 @@ export function List({ list, cards }: ListProps) {
               handleArchiveList();
               setShowMenu(false);
             }}
-            className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent"
+            className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
           >
             Archive List
           </button>

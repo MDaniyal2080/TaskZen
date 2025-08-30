@@ -756,12 +756,12 @@ export function Board({ boardId }: BoardProps) {
     <div className="h-full overflow-x-hidden" style={boardStyle}>
       {/* Board Header */}
       <div className={cn(
-        "border-b border bg-card/80 backdrop-blur-sm shadow-sm",
+        "border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm",
         compact ? 'mt-2 px-4 py-2' : 'mt-3 sm:mt-4 md:mt-5 px-6 py-3 md:py-4'
       )}>
         <div className="flex items-center justify-between relative">
           <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
               {board.title}
             </h1>
             <div
@@ -812,7 +812,7 @@ export function Board({ boardId }: BoardProps) {
             )}
             
             {/* View Mode Toggle */}
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
               <button
                 onClick={() => {
                   setViewMode('kanban');
@@ -823,8 +823,8 @@ export function Board({ boardId }: BoardProps) {
                 }}
                 className={`px-3 py-1 text-sm rounded-md transition-colors flex items-center gap-1 ${
                   viewMode === 'kanban'
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -840,8 +840,8 @@ export function Board({ boardId }: BoardProps) {
                 }}
                 className={`px-3 py-1 text-sm rounded-md transition-colors flex items-center gap-1 ${
                   viewMode === 'calendar'
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <Calendar className="w-4 h-4" />
@@ -862,8 +862,8 @@ export function Board({ boardId }: BoardProps) {
                 }}
                 className={`hidden sm:flex p-2 rounded-lg transition-colors items-center gap-1 ${
                   showFilters
-                    ? 'bg-primary/10 text-primary'
-                    : 'hover:bg-accent text-muted-foreground'
+                    ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                    : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
                 }`}
               >
                 <Filter className="w-4 h-4" />
@@ -875,7 +875,7 @@ export function Board({ boardId }: BoardProps) {
             <button
               ref={mobileControlsBtnRef}
               onClick={() => setShowMobileControls(v => !v)}
-              className="sm:hidden p-2 rounded-lg transition-colors hover:bg-accent"
+              className="sm:hidden p-2 rounded-lg transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
               aria-expanded={showMobileControls}
               aria-label="Open board controls"
             >
@@ -893,8 +893,8 @@ export function Board({ boardId }: BoardProps) {
               }}
               className={`hidden sm:flex p-2 rounded-lg transition-colors items-center gap-1 ${
                 showActivity
-                  ? 'bg-primary/10 text-primary'
-                  : 'hover:bg-accent text-muted-foreground'
+                  ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                  : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
               }`}
               aria-pressed={showActivity}
               aria-label="Toggle activity panel"
@@ -908,25 +908,25 @@ export function Board({ boardId }: BoardProps) {
               <button
                 ref={boardMenuBtnRef}
                 onClick={() => setShowMenu((v) => !v)}
-                className="p-2 hover:bg-accent rounded-lg transition-colors"
+                className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
               >
-                <MoreHorizontal className="w-5 h-5 text-muted-foreground" />
+                <MoreHorizontal className="w-5 h-5 text-slate-600 dark:text-slate-400" />
               </button>
             </div>
           )}
         </div>
         {board.description && (
-          <p className="mt-2 text-muted-foreground">
+          <p className="mt-2 text-slate-600 dark:text-slate-400">
             {board.description}
           </p>
         )}
         
         {/* Filters Bar (only in Kanban view) */}
         {viewMode === 'kanban' && showFilters && (
-          <div className="mt-4 p-4 bg-secondary rounded-lg border">
+          <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Priority:</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Priority:</label>
                 <Select value={filters.priority} onValueChange={(value) => {
                   setFilters(prev => ({ ...prev, priority: value }));
                   const params = new URLSearchParams(searchParams.toString());
@@ -948,7 +948,7 @@ export function Board({ boardId }: BoardProps) {
               </div>
               
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Status:</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Status:</label>
                 <Select value={filters.completed} onValueChange={(value) => {
                   setFilters(prev => ({ ...prev, completed: value }));
                   const params = new URLSearchParams(searchParams.toString());
@@ -968,7 +968,7 @@ export function Board({ boardId }: BoardProps) {
               </div>
               
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Due Date:</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Due Date:</label>
                 <Select value={filters.dueDate} onValueChange={(value) => {
                   setFilters(prev => ({ ...prev, dueDate: value }));
                   const params = new URLSearchParams(searchParams.toString());
@@ -990,7 +990,7 @@ export function Board({ boardId }: BoardProps) {
               </div>
               
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-muted-foreground">Sort:</label>
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Sort:</label>
                 <Select value={sortBy} onValueChange={(value) => {
                   const next = isCalendarSortBy(value) ? value : 'position';
                   setSortBy(next);
@@ -1019,7 +1019,7 @@ export function Board({ boardId }: BoardProps) {
                     const qs = params.toString();
                     router.replace(`${pathname}${qs ? `?${qs}` : ''}`);
                   }}
-                  className="p-1 hover:bg-accent rounded transition-colors"
+                  className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
                 >
                   {sortOrder === 'asc' ? <SortAsc className="w-4 h-4" /> : <SortDesc className="w-4 h-4" />}
                 </button>
@@ -1035,7 +1035,7 @@ export function Board({ boardId }: BoardProps) {
                   const qs = params.toString();
                   router.replace(`${pathname}${qs ? `?${qs}` : ''}`);
                 }}
-                className="px-3 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="px-3 py-1 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
               >
                 Clear All
               </button>
@@ -1067,7 +1067,7 @@ export function Board({ boardId }: BoardProps) {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex gap-2 sm:gap-4 overflow-x-auto custom-scrollbar pb-4 px-2 sm:px-0 -mx-2 sm:mx-0">
+          <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-4 px-2 sm:px-0 -mx-2 sm:mx-0">
             <SortableContext items={lists.map(l => l.id)} strategy={horizontalListSortingStrategy}>
               {lists.map((list) => (
                 <List
@@ -1081,20 +1081,20 @@ export function Board({ boardId }: BoardProps) {
             {/* Add List Button */}
             <div className="w-64 sm:w-72 flex-shrink-0">
               {showAddList ? (
-                <div className="bg-card text-card-foreground rounded-lg p-3 shadow-sm border">
+                <div className="bg-white dark:bg-slate-800 rounded-lg p-3 shadow-sm">
                   <input
                     type="text"
                     placeholder="Enter list title..."
                     value={newListTitle}
                     onChange={(e) => setNewListTitle(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleAddList()}
-                    className="w-full px-3 py-2 border rounded-md bg-card text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-md bg-transparent text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     autoFocus
                   />
                   <div className="flex gap-2 mt-2">
                     <button
                       onClick={handleAddList}
-                      className="px-3 py-1 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                      className="px-3 py-1 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors"
                     >
                       Add List
                     </button>
@@ -1103,7 +1103,7 @@ export function Board({ boardId }: BoardProps) {
                         setShowAddList(false);
                         setNewListTitle('');
                       }}
-                      className="px-3 py-1 text-muted-foreground hover:text-foreground transition-colors"
+                      className="px-3 py-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                     >
                       Cancel
                     </button>
@@ -1112,10 +1112,10 @@ export function Board({ boardId }: BoardProps) {
               ) : (
                 <button
                   onClick={() => setShowAddList(true)}
-                  className="w-full flex items-center gap-2 p-3 bg-card/50 backdrop-blur-sm rounded-lg hover:bg-card transition-all border-2 border-dashed border"
+                  className="w-full flex items-center gap-2 p-3 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-all border-2 border-dashed border-slate-300 dark:border-slate-600"
                 >
-                  <Plus className="w-5 h-5 text-muted-foreground" />
-                  <span className="text-muted-foreground font-medium">
+                  <Plus className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                  <span className="text-slate-600 dark:text-slate-400 font-medium">
                     Add another list
                   </span>
                 </button>
