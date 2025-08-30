@@ -10,17 +10,19 @@ import { useTheme } from 'next-themes'
 import { useSettings } from '@/contexts/SettingsContext'
 
 function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) return null
 
-  const isDark = theme === 'dark'
+  const isDark = resolvedTheme === 'dark'
   return (
     <Button
       variant="ghost"
       size="icon"
       aria-label="Toggle theme"
+      aria-pressed={isDark}
+      className="rounded-full hover:bg-accent"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
     >
       {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -67,7 +69,7 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           {/* Left: Brand */}
           <div className="flex items-center gap-2">
