@@ -350,10 +350,11 @@ export function Card({ card, isDragging = false }: CardProps) {
       {...listeners}
       onDoubleClick={() => setShowDetail(true)}
       className={cn(
-        "w-full bg-white dark:bg-slate-700 rounded-lg cursor-pointer border border-slate-200 dark:border-slate-600 group",
-        compact ? 'p-2' : 'p-2 sm:p-3',
-        anims ? 'hover:shadow-md transition-all' : 'transition-none',
-        card.isCompleted && "opacity-60"
+        "w-full bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-xl cursor-pointer border border-slate-200/60 dark:border-slate-600/60 group relative overflow-hidden",
+        compact ? 'p-2' : 'p-3 sm:p-4',
+        anims ? 'hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50 hover:-translate-y-1 transition-all duration-300' : 'transition-none',
+        card.isCompleted && "opacity-60",
+        "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/20 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300"
       )}
     >
       {/* Card Labels (moved above title) */}
@@ -415,21 +416,21 @@ export function Card({ card, isDragging = false }: CardProps) {
       )}
 
       {/* Card Header */}
-      <div className="flex items-start justify-between mb-1 sm:mb-2">
+      <div className="flex items-start justify-between mb-1 sm:mb-2 gap-2">
         <h4 className={cn(
-          "text-xs sm:text-sm font-medium text-slate-900 dark:text-white flex-1 break-words",
+          "text-xs sm:text-sm font-medium text-slate-900 dark:text-white flex-1 break-words leading-tight min-w-0",
           card.isCompleted && "line-through text-slate-500 dark:text-slate-400"
         )}>
           {card.title}
         </h4>
-        <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="relative opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           <button
             ref={buttonRef}
             onClick={(e) => {
               e.stopPropagation();
               setShowMenu(!showMenu);
             }}
-            className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+            className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors"
           >
             <MoreHorizontal className="w-4 h-4 text-slate-600 dark:text-slate-400" />
           </button>
@@ -438,7 +439,7 @@ export function Card({ card, isDragging = false }: CardProps) {
 
       {/* Card Description */}
       {!compact && card.description && (
-        <p className="text-[10px] sm:text-xs text-slate-600 dark:text-slate-400 mb-1 sm:mb-2 line-clamp-2">
+        <p className="text-[10px] sm:text-xs text-slate-600 dark:text-slate-400 mb-1 sm:mb-2 line-clamp-2 break-words overflow-hidden">
           {card.description}
         </p>
       )}
@@ -446,26 +447,26 @@ export function Card({ card, isDragging = false }: CardProps) {
       {/* Labels moved above title */}
 
       {/* Card Footer */}
-      <div className="flex items-center justify-between mt-1 sm:mt-2 gap-1">
-        <div className={cn("flex items-center", compact ? 'gap-2' : 'gap-3')}>
+      <div className="flex items-center justify-between mt-1 sm:mt-2 gap-1 min-w-0">
+        <div className={cn("flex items-center flex-wrap min-w-0", compact ? 'gap-1' : 'gap-2')}>
           {/* Due Date */}
           {card.dueDate && (
             <span
               title={dueTooltip}
               aria-label={dueTooltip}
               className={cn(
-                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs",
+                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs flex-shrink-0",
                 duePillClass
               )}
             >
-              <Clock className="w-3 h-3" />
-              {format(new Date(card.dueDate), 'MMM d')}
+              <Clock className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{format(new Date(card.dueDate), 'MMM d')}</span>
             </span>
           )}
 
           {/* Priority (always shown) */}
           <span className={cn(
-            "px-1.5 py-0.5 text-xs font-medium rounded",
+            "px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0",
             priorityInfo.color
           )}>
             {card.priority || 'MEDIUM'}
@@ -473,7 +474,7 @@ export function Card({ card, isDragging = false }: CardProps) {
 
           {/* Attachments */}
           {(((card.attachments?.length ?? 0) > 0) || ((card._count?.attachments ?? 0) > 0)) && (
-            <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 flex-shrink-0">
               <Paperclip className="w-3 h-3" />
               <span className="text-xs">{card.attachments?.length ?? card._count?.attachments ?? 0}</span>
             </div>
@@ -481,7 +482,7 @@ export function Card({ card, isDragging = false }: CardProps) {
 
           {/* Comments */}
           {(((card.comments?.length ?? 0) > 0) || ((card._count?.comments ?? 0) > 0)) && (
-            <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400 flex-shrink-0">
               <MessageSquare className="w-3 h-3" />
               <span className="text-xs">{card.comments?.length ?? card._count?.comments ?? 0}</span>
             </div>
@@ -489,7 +490,7 @@ export function Card({ card, isDragging = false }: CardProps) {
 
           {/* Assignee */}
           {card.assignee && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-shrink-0">
               <Avatar className="w-5 h-5">
                 <AvatarImage src={card.assignee.avatar ?? undefined} alt={card.assignee.username} />
                 <AvatarFallback className="bg-indigo-500 text-white text-[10px] font-medium">
@@ -503,7 +504,7 @@ export function Card({ card, isDragging = false }: CardProps) {
 
         {/* Completion Status */}
         {card.isCompleted && (
-          <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+          <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
         )}
       </div>
 
