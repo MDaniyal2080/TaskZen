@@ -8,7 +8,7 @@ import { useAuthStore } from '@/store/auth'
  import { useQuery, useQueryClient } from '@tanstack/react-query'
  import { getBoards } from '@/lib/boards'
  import type { Board } from '@/shared/types'
- import { Loader2, Crown, AlertCircle, Plus, Sparkles, TrendingUp, Users, Calendar } from 'lucide-react'
+ import { Loader2, Crown, AlertCircle } from 'lucide-react'
  import { toast } from 'react-hot-toast'
 import { createBoard, type CreateBoardInput, getBoardTemplates, type BoardTemplate, BOARD_THEMES, BOARD_BACKGROUNDS } from '@/lib/boards'
 import { Input } from '@/components/ui/input'
@@ -126,161 +126,52 @@ export default function BoardsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400/10 to-purple-600/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-indigo-400/10 to-pink-600/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-      </div>
-
-      <div className="mx-auto max-w-7xl p-6 relative z-10">
-        {/* Header Section */}
-        <div className="mb-8">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full border border-slate-200/60 dark:border-slate-600/60 text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">
-                <Sparkles className="h-3 w-3 text-yellow-500" />
-                <span>Dashboard</span>
-              </div>
-              <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
-                Your Workspace
-              </h1>
-              <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl">
-                Manage your projects, collaborate with your team, and track progress across all your boards
-              </p>
-            </div>
-            
-            <div className="flex flex-wrap gap-3 w-full lg:w-auto">
-              <Button 
-                variant="outline" 
-                onClick={() => router.push('/')}
-                className="glass-card border-slate-300/60 dark:border-slate-600/60 hover:bg-white/80 dark:hover:bg-slate-800/80 backdrop-blur-sm"
-              >
-                Home
-              </Button>
-              {user?.role === 'ADMIN' && (
-                <Button 
-                  variant="outline" 
-                  onClick={() => router.push('/admin')}
-                  className="glass-card border-slate-300/60 dark:border-slate-600/60 hover:bg-white/80 dark:hover:bg-slate-800/80 backdrop-blur-sm"
-                >
-                  Admin Dashboard
-                </Button>
-              )}
-              {!user?.isPro && (
-                <Button 
-                  variant="outline" 
-                  onClick={() => router.push('/billing')}
-                  className="glass-card border-amber-300/60 dark:border-amber-600/60 hover:bg-amber-50/80 dark:hover:bg-amber-900/20 backdrop-blur-sm text-amber-700 dark:text-amber-300"
-                >
-                  <Crown className="h-4 w-4 mr-2" />
-                  Upgrade
-                </Button>
-              )}
-              <Button 
-                onClick={() => setShowCreate((v) => !v)} 
-                disabled={atLimit}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                {showCreate ? 'Close' : 'New Board'}
-              </Button>
-            </div>
+    <div className="min-h-screen p-6  from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+      <div className="mx-auto max-w-6xl">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold">Your Boards</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Browse and open your boards</p>
+          </div>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <Button onClick={() => router.push('/')}>Home</Button>
+            {user?.role === 'ADMIN' && (
+              <Button variant="outline" onClick={() => router.push('/admin')}>Admin Dashboard</Button>
+            )}
+            {!user?.isPro && (
+              <Button variant="outline" onClick={() => router.push('/billing')}>Upgrade</Button>
+            )}
+            <Button onClick={() => setShowCreate((v) => !v)} disabled={atLimit}>{showCreate ? 'Close' : 'New Board'}</Button>
           </div>
         </div>
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="glass-card border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Total Boards</p>
-                  <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{boards.length}</p>
-                </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <TrendingUp className="h-6 w-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="glass-card border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Team Members</p>
-                  <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">12</p>
-                </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <Users className="h-6 w-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="glass-card border-0 shadow-lg hover:shadow-xl transition-all duration-300 group">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300">This Month</p>
-                  <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">47</p>
-                </div>
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <Calendar className="h-6 w-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         {!user?.isPro && (
-          <Card className="mb-8 border-0 bg-gradient-to-r from-amber-50/80 to-orange-50/80 dark:from-amber-950/20 dark:to-orange-950/20 backdrop-blur-sm shadow-lg">
-            <CardContent className="p-6">
-              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Crown className="h-6 w-6 text-white" />
+          <Card className="mb-6 border-dashed border-violet-300/60 bg-violet-50/50 dark:bg-violet-950/20">
+            <CardContent className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Crown className="h-5 w-5 text-violet-600" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">Free plan</Badge>
+                    <span className="text-sm text-muted-foreground">{ownedCount}/{maxFreeBoards} boards used</span>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Free Plan</Badge>
-                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{ownedCount}/{maxFreeBoards} boards used</span>
-                    </div>
-                    <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1">
-                      {atLimit ? 'Board Limit Reached' : 'Unlock Premium Features'}
-                    </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
-                      {atLimit
-                        ? `You've reached the free limit of ${maxFreeBoards} boards. Upgrade to Pro for unlimited boards and advanced features.`
-                        : 'Upgrade to Pro for unlimited boards, advanced analytics, priority support, and more.'}
-                    </p>
-                  </div>
+                  <p className="text-sm mt-1">
+                    {atLimit
+                      ? `You've reached the free limit of ${maxFreeBoards} boards. Upgrade to create unlimited boards.`
+                      : `Upgrade to Pro for unlimited boards and advanced features.`}
+                  </p>
                 </div>
-                <Button 
-                  onClick={() => router.push('/billing')} 
-                  className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white border-0 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 whitespace-nowrap"
-                >
-                  <Crown className="h-4 w-4 mr-2" />
-                  Upgrade to Pro
-                </Button>
               </div>
+              <Button onClick={() => router.push('/billing')} className="whitespace-nowrap">Upgrade to Pro</Button>
             </CardContent>
           </Card>
         )}
 
         {showCreate && (
-          <Card className="mb-8 glass-card border-0 shadow-xl">
-            <CardHeader className="pb-6">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-                  <Plus className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl font-semibold">Create a new board</CardTitle>
-                  <CardDescription className="text-slate-600 dark:text-slate-300">Choose a template and customize your board to get started</CardDescription>
-                </div>
-              </div>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Create a new board</CardTitle>
+              <CardDescription>Choose a template and customize your board</CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="basic" className="w-full">
@@ -321,8 +212,8 @@ export default function BoardsPage() {
                         {builtInTemplates.map((template) => (
                           <div
                             key={template.id}
-                            className={`p-4 glass-card border-0 cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1 duration-300 ${
-                              selectedTemplate === template.id ? 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-950/20' : ''
+                            className={`p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
+                              selectedTemplate === template.id ? 'border-primary bg-primary/5' : 'border-gray-200'
                             }`}
                             onClick={() => setSelectedTemplate(template.id)}
                           >
@@ -359,8 +250,8 @@ export default function BoardsPage() {
                           {customTemplates.map((template) => (
                             <div
                               key={template.id}
-                              className={`p-4 glass-card border-0 cursor-pointer transition-all hover:shadow-lg hover:-translate-y-1 duration-300 ${
-                                selectedTemplate === template.id ? 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-950/20' : ''
+                              className={`p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
+                                selectedTemplate === template.id ? 'border-primary bg-primary/5' : 'border-gray-200'
                               }`}
                               onClick={() => setSelectedTemplate(template.id)}
                             >
@@ -448,84 +339,39 @@ export default function BoardsPage() {
           </Card>
         )}
 
-        {/* Boards Section */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">Your Boards</h2>
-            {boards.length > 0 && (
-              <p className="text-sm text-slate-600 dark:text-slate-300">{boards.length} board{boards.length !== 1 ? 's' : ''}</p>
-            )}
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {isLoading && (
-              <Card className="col-span-full glass-card border-0 shadow-lg">
-                <CardContent className="py-16 flex items-center justify-center text-slate-600 dark:text-slate-300">
-                  <Loader2 className="h-6 w-6 mr-3 animate-spin" /> 
-                  <span className="text-lg">Loading your boards...</span>
-                </CardContent>
-              </Card>
-            )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {isLoading && (
+            <Card className="col-span-full">
+              <CardContent className="py-10 flex items-center justify-center text-muted-foreground">
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading boards...
+              </CardContent>
+            </Card>
+          )}
 
-            {!isLoading && boards.length === 0 && (
-              <Card className="col-span-full glass-card border-0 shadow-lg">
-                <CardContent className="py-16 text-center">
-                  <div className="space-y-4">
-                    <div className="w-16 h-16 mx-auto bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 rounded-2xl flex items-center justify-center">
-                      <Plus className="h-8 w-8 text-slate-500 dark:text-slate-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">No boards yet</h3>
-                      <p className="text-slate-600 dark:text-slate-300 mb-4">Create your first board to start organizing your tasks</p>
-                    </div>
-                    <Button 
-                      onClick={() => setShowCreate(true)}
-                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white border-0 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create your first board
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          {!isLoading && boards.length === 0 && (
+            <Card className="col-span-full">
+              <CardContent className="py-10 text-center text-muted-foreground">
+                <div className="space-y-3">
+                  <div>You have no boards yet.</div>
+                  <Button onClick={() => setShowCreate(true)}>Create your first board</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-            {boards.map((b) => (
-              <Card 
-                key={b.id} 
-                className="glass-card border-0 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer group relative overflow-hidden" 
-                onClick={() => { router.push(`/boards/${b.id}`) }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <CardHeader className="relative z-10 pb-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div 
-                      className="w-4 h-4 rounded-full flex-shrink-0 shadow-sm" 
-                      style={{ backgroundColor: b.color }}
-                    />
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" title="Active"></div>
-                  </div>
-                  <CardTitle className="text-lg font-semibold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300 line-clamp-1">
-                    {b.title}
-                  </CardTitle>
-                  {b.description && (
-                    <CardDescription className="text-slate-600 dark:text-slate-300 line-clamp-2 text-sm">
-                      {b.description}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent className="relative z-10 pt-0">
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                    <span>Updated recently</span>
-                    <span className="flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      3
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          {boards.map((b) => (
+            <Card key={b.id} className="cursor-pointer hover:shadow-md transition" onClick={() => { router.push(`/boards/${b.id}`) }}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: b.color }} />
+                  {b.title}
+                </CardTitle>
+                {b.description && (
+                  <CardDescription className="line-clamp-2">{b.description}</CardDescription>
+                )}
+              </CardHeader>
+            </Card>
+          ))}
         </div>
       </div>
     </div>

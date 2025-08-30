@@ -165,19 +165,18 @@ export function List({ list, cards }: ListProps) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
   };
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        setDroppableNodeRef(node);
+      }}
       style={style}
-      {...attributes}
-      {...listeners}
       className={cn(
-        "w-80 glass-card p-4 flex flex-col gap-4 min-h-[200px] relative overflow-hidden",
-        "before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300",
-        isDragging && "opacity-50 shadow-2xl scale-105"
+        "bg-slate-50 dark:bg-slate-800 rounded-lg p-2 sm:p-3 w-64 sm:w-72 flex-shrink-0",
+        isDragging && "opacity-50"
       )}
     >
       {/* List Header */}
@@ -215,7 +214,7 @@ export function List({ list, cards }: ListProps) {
       </div>
 
       {/* Cards Container */}
-      <div ref={setDroppableNodeRef} className="space-y-1.5 sm:space-y-2 mb-2 max-h-[calc(100vh-280px)] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+      <div className="space-y-1.5 sm:space-y-2 mb-2 max-h-[calc(100vh-280px)] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
         <SortableContext id={list.id} items={cardIds} strategy={verticalListSortingStrategy}>
           {sortedCards.map((card) => (
             <Card key={card.id} card={card} />

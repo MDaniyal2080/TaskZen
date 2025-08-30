@@ -10,54 +10,20 @@ import { useTheme } from 'next-themes'
 import { useSettings } from '@/contexts/SettingsContext'
 
 function ThemeToggle() {
-  const { theme, setTheme, resolvedTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-  
-  if (!mounted) {
-    return (
-      <Button variant="ghost" size="icon" aria-label="Loading theme toggle" disabled>
-        <div className="h-5 w-5 animate-pulse bg-muted rounded" />
-      </Button>
-    )
-  }
+  useEffect(() => setMounted(true), [])
+  if (!mounted) return null
 
-  // Use resolvedTheme to get the actual current theme (handles 'system' properly)
-  const currentTheme = resolvedTheme || theme
-  const isDark = currentTheme === 'dark'
-  
-  const handleToggle = () => {
-    // Cycle through: light -> dark -> system
-    if (theme === 'light') {
-      setTheme('dark')
-    } else if (theme === 'dark') {
-      setTheme('system')
-    } else {
-      setTheme('light')
-    }
-  }
-
+  const isDark = theme === 'dark'
   return (
     <Button
       variant="ghost"
       size="icon"
-      aria-label={`Current theme: ${theme}. Click to toggle`}
-      onClick={handleToggle}
-      className="relative overflow-hidden transition-all duration-200 hover:scale-105"
+      aria-label="Toggle theme"
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
     >
-      <div className="relative">
-        {isDark ? (
-          <Sun className="h-5 w-5 transition-transform duration-200 rotate-0 scale-100" />
-        ) : (
-          <Moon className="h-5 w-5 transition-transform duration-200 rotate-0 scale-100" />
-        )}
-        {theme === 'system' && (
-          <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-        )}
-      </div>
+      {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
     </Button>
   )
 }
@@ -69,17 +35,11 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
     <Link
       href={href}
       className={
-        'text-sm px-3 py-2 rounded-lg transition-all duration-200 relative overflow-hidden group ' +
-        (active 
-          ? 'text-primary font-medium bg-primary/10 shadow-sm' 
-          : 'text-muted-foreground hover:text-foreground hover:bg-accent/50 hover:shadow-sm hover:-translate-y-0.5'
-        )
+        'text-sm px-2 py-1 rounded-md transition-colors ' +
+        (active ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground')
       }
     >
-      <span className="relative z-10">{children}</span>
-      {active && (
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-purple-600/20 animate-pulse" />
-      )}
+      {children}
     </Link>
   )
 }
@@ -107,17 +67,12 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full glass-navbar">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
+      <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex h-14 items-center justify-between px-4">
           {/* Left: Brand */}
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <KanbanSquare className="h-6 w-6 text-primary animate-float" />
-              <div className="absolute -inset-1 bg-primary/20 rounded-lg blur-sm animate-pulse"></div>
-            </div>
-            <Link href="/" className="font-bold text-lg bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent hover:scale-105 transition-transform duration-200">
-              {settings?.siteName || 'TaskZen'}
-            </Link>
+          <div className="flex items-center gap-2">
+            <KanbanSquare className="h-5 w-5 text-primary" />
+            <Link href="/" className="font-semibold">{settings?.siteName || 'TaskZen'}</Link>
           </div>
 
           {/* Middle: Nav links (desktop) */}
